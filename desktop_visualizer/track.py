@@ -1,14 +1,47 @@
 """Follow the current track through MPRIS (playerctl) and derive a seed and album colour."""
 
 import colorsys
+import os
 import shutil
+import tempfile
 import zlib
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 from PySide6.QtCore import QObject, QProcess, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest
 
 POLL_MS = 1500
+MAX_ART_BYTES = 5 * 1024 * 1024
+ART_TIMEOUT_MS = 10000
+# Cover art is only fetched from Spotify's image CDN. Other players (browsers) hand
+# over local temp files. Anything else is ignored, because in "all system audio" mode
+# any web page with a media session can choose this URL.
+ART_HOSTS = ("i.scdn.co",)
+
+
+def _art_dirs():
+    dirs = [tempfile.gettempdir(), os.environ.get("XDG_RUNTIME_DIR"),
+            os.environ.get("XDG_CACHE_HOME") or str(Path.home() / ".cache")]
+    return [Path(d).resolve() for d in dirs if d]
+
+
+def art_source(url, art_dirs=None):
+    """Return ("https", url) or ("file", path) if the cover may be loaded, else None."""
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return None
+    if parts.scheme == "https" and (parts.hostname or "").lower() in ART_HOSTS:
+        return ("https", url)
+    if parts.scheme == "file" and parts.netloc in ("", "localhost"):
+        path = Path(unquote(parts.path)).resolve()
+        allowed = art_dirs if art_dirs is not None else _art_dirs()
+        if any(path.is_relative_to(d) for d in allowed) and path.is_file() \
+                and path.stat().st_size <= MAX_ART_BYTES:
+            return ("file", str(path))
+    return None
 
 
 def track_seed(track_id):
@@ -82,16 +115,33 @@ class TrackWatcher(QObject):
             return
         self.track_id = track_id
         self.trackChanged.emit(track_seed(track_id))
-        if art_url.startswith(("https://", "http://", "file://")):
-            reply = self.network.get(QNetworkRequest(QUrl(art_url)))
-            reply.finished.connect(lambda: self._on_art(reply, track_id))
+        source = art_source(art_url)
+        if source is None:
+            return
+        kind, location = source
+        if kind == "file":
+            self._use_art(QImage(location), track_id)
+            return
+        request = QNetworkRequest(QUrl(location))
+        request.setTransferTimeout(ART_TIMEOUT_MS)
+        request.setAttribute(QNetworkRequest.Attribute.RedirectPolicyAttribute,
+                             QNetworkRequest.RedirectPolicy.SameOriginRedirectPolicy)
+        reply = self.network.get(request)
+        # Stop oversized downloads early instead of buffering them.
+        reply.downloadProgress.connect(
+            lambda received, _total: reply.abort() if received > MAX_ART_BYTES else None)
+        reply.finished.connect(lambda: self._on_art(reply, track_id))
 
     def _on_art(self, reply, track_id):
-        data = reply.readAll()
+        ok = reply.error() == reply.NetworkError.NoError
+        data = reply.readAll() if ok else b""
         reply.deleteLater()
+        if ok and track_id == self.track_id:
+            self._use_art(QImage.fromData(data), track_id)
+
+    def _use_art(self, image, track_id):
         if track_id != self.track_id:
             return
-        image = QImage.fromData(data)
         if image.isNull():
             return
         small = image.scaled(32, 32)

@@ -1,9 +1,11 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 
 from desktop_visualizer.audio import SAMPLE_RATE, LevelMeter, find_spotify_stream
-from desktop_visualizer.track import pick_colour, track_seed
+from desktop_visualizer.track import MAX_ART_BYTES, art_source, pick_colour, track_seed
 
 
 def stream(index, name=None, binary=None, corked=False):
@@ -95,6 +97,41 @@ class TrackTest(unittest.TestCase):
 
     def test_pick_colour_empty(self):
         self.assertIsNone(pick_colour([]))
+
+
+class ArtSourceTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name).resolve()
+        self.art = self.root / "cover art.png"
+        self.art.write_bytes(b"\x89PNG fake")
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def test_spotify_cdn_allowed(self):
+        url = "https://i.scdn.co/image/ab67616d0000b273abc"
+        self.assertEqual(art_source(url, [self.root]), ("https", url))
+
+    def test_other_hosts_and_schemes_rejected(self):
+        for url in ("http://i.scdn.co/image/x", "https://192.168.1.1/admin", "https://i.scdn.co.evil.com/x",
+                    "https://localhost:8080/", "ftp://i.scdn.co/x", "data:image/png;base64,AAAA", "",
+                    "file://otherhost/tmp/x.png"):
+            with self.subTest(url=url):
+                self.assertIsNone(art_source(url, [self.root]))
+
+    def test_local_file_only_inside_allowed_dirs(self):
+        self.assertEqual(art_source(f"file://{self.art}".replace(" ", "%20"), [self.root]), ("file", str(self.art)))
+        self.assertIsNone(art_source("file:///etc/passwd", [self.root]))
+        escape = f"file://{self.root}/../../etc/passwd"
+        self.assertIsNone(art_source(escape, [self.root]))
+        self.assertIsNone(art_source(f"file://{self.root}/missing.png", [self.root]))
+
+    def test_oversized_file_rejected(self):
+        big = self.root / "big.png"
+        with open(big, "wb") as f:
+            f.truncate(MAX_ART_BYTES + 1)
+        self.assertIsNone(art_source(f"file://{big}", [self.root]))
 
 
 if __name__ == "__main__":
