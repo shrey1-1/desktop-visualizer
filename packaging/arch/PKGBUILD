@@ -1,6 +1,6 @@
 # Maintainer: shrey1-1 <https://github.com/shrey1-1>
 pkgname=desktop-visualizer
-pkgver=1.1.0
+pkgver=1.2.0
 pkgrel=1
 pkgdesc="Spotify/system audio visualizer overlay for the Linux desktop (NCS visualizer), with OpenRGB sync"
 arch=('any')
