@@ -20,19 +20,36 @@ Window {
     // Until moved, the starting spot is recomputed whenever the surface size changes,
     // because the compositor may report a temporary size first.
     property bool custom: false
+    // Layer-shell only: shrink the surface to the visualizer box when not editing, so the
+    // compositor doesn't blend a full-screen transparent surface every frame.
+    property bool shrinkable: false
+    readonly property bool boxSurface: shrinkable && !app.editing
 
     // ---- placement ----
 
     function clamp() {
-        boxSize = Math.max(minSize, Math.min(boxSize, width, height));
-        boxX = Math.max(0, Math.min(boxX, width - boxSize));
-        boxY = Math.max(0, Math.min(boxY, height - boxSize));
+        const sw = boxSurface ? screen.width : width;
+        const sh = boxSurface ? screen.height : height;
+        boxSize = Math.max(minSize, Math.min(boxSize, sw, sh));
+        boxX = Math.max(0, Math.min(boxX, sw - boxSize));
+        boxY = Math.max(0, Math.min(boxY, sh - boxSize));
     }
 
     function place() {
+        if (boxSurface) {
+            if (!custom) {
+                boxSize = settings.size;
+                const saved = settings.x != null && settings.y != null;
+                boxX = saved ? settings.x : (screen.width - boxSize) / 2;
+                boxY = saved ? settings.y : (screen.height - boxSize) / 2;
+            }
+            clamp();
+            updateInputArea();
+            return;
+        }
         if (width <= 0 || height <= 0)
             return;
-        if (!custom) {
+        if (!custom && !shrinkable) {
             boxSize = settings.size;
             const saved = settings.x != null && settings.y != null;
             boxX = saved ? settings.x : (width - boxSize) / 2;
@@ -43,15 +60,18 @@ Window {
     }
 
     function updateInputArea() {
-        app.setInputArea(Math.round(boxX), Math.round(boxY), Math.round(boxSize));
+        if (boxSurface)
+            app.setInputArea(0, 0, Math.round(boxSize));
+        else
+            app.setInputArea(Math.round(boxX), Math.round(boxY), Math.round(boxSize));
     }
 
     function save() {
         app.saveGeometry(Math.round(boxX), Math.round(boxY), Math.round(boxSize));
     }
 
-    onWidthChanged: place()
-    onHeightChanged: place()
+    onWidthChanged: if (!boxSurface) place()
+    onHeightChanged: if (!boxSurface) place()
 
     // ---- feeding the visualizer ----
 
@@ -63,7 +83,10 @@ Window {
         view.setFrameRate(app.frameRate);
     }
 
-    Component.onCompleted: sendAll()
+    Component.onCompleted: {
+        place();
+        sendAll();
+    }
 
     Connections {
         target: app
@@ -108,10 +131,12 @@ Window {
         }
 
         function onResetRequested() {
+            const sw = root.boxSurface ? root.screen.width : root.width;
+            const sh = root.boxSurface ? root.screen.height : root.height;
             root.custom = false;
             root.boxSize = root.settings.size;
-            root.boxX = (root.width - root.boxSize) / 2;
-            root.boxY = (root.height - root.boxSize) / 2;
+            root.boxX = (sw - root.boxSize) / 2;
+            root.boxY = (sh - root.boxSize) / 2;
             root.custom = true;
             root.clamp();
             root.updateInputArea();
@@ -124,8 +149,8 @@ Window {
     Item {
         id: box
 
-        x: root.boxX
-        y: root.boxY
+        x: root.boxSurface ? 0 : root.boxX
+        y: root.boxSurface ? 0 : root.boxY
         width: root.boxSize
         height: root.boxSize
 
@@ -140,9 +165,18 @@ Window {
                 NumberAnimation { duration: 800; easing.type: Easing.InOutQuad }
             }
 
-            // Advances the animation once per displayed frame (e.g. 165 times a second).
+            // Advances the animation once per displayed frame (e.g. 165 times a second),
+            // or at the chosen limit. A Timer is used below the display rate so Qt Quick
+            // doesn't keep rendering at the display rate anyway.
             FrameAnimation {
-                running: view.running
+                running: view.running && view.frameRate <= 0
+                onTriggered: view.tick()
+            }
+
+            Timer {
+                running: view.running && view.frameRate > 0
+                interval: view.frameRate > 0 ? Math.max(1, Math.round(1000 / view.frameRate)) : 16
+                repeat: true
                 onTriggered: view.tick()
             }
         }
