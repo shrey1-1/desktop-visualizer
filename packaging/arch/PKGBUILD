@@ -46,8 +46,7 @@ package() {
 	cat >"$pkgdir/usr/bin/$pkgname" <<EOF
 #!/bin/sh
 export DESKTOP_VISUALIZER_LAUNCHER=/usr/bin/$pkgname
-export PYTHONPATH="/usr/lib/$pkgname\${PYTHONPATH:+:\$PYTHONPATH}"
-exec /usr/bin/python3 -m desktop_visualizer "\$@"
+exec /usr/bin/python3 -I -c 'import sys; sys.path.insert(0, "/usr/lib/$pkgname"); from desktop_visualizer.__main__ import main; sys.exit(main())' "\$@"
 EOF
 	chmod 755 "$pkgdir/usr/bin/$pkgname"
 

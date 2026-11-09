@@ -180,6 +180,10 @@ class AudioCapture(threading.Thread):
                 buffer = buffer[hop_bytes:]
                 level = self.meter.feed(samples)
                 if math.isfinite(level):
-                    self.on_level(level)
+                    try:
+                        self.on_level(level)
+                    except RuntimeError:  # receiver already destroyed during shutdown
+                        self.stopping.set()
+                        break
 
         self._kill()

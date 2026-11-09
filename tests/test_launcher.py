@@ -45,8 +45,26 @@ class AutostartTest(unittest.TestCase):
     def test_command_without_installed_launcher(self):
         with mock.patch.dict(os.environ, {"DESKTOP_VISUALIZER_LAUNCHER": ""}):
             command = launcher.launcher_command()
-        self.assertIn("-m desktop_visualizer", command)
-        self.assertIn("PYTHONPATH=", command)
+        self.assertIn(" -I -c ", command)
+        self.assertIn(str(launcher.PACKAGE.parent), command)
+
+    def test_current_folder_cannot_shadow_the_app(self):
+        # A desktop_visualizer/ package in the working directory must not be imported.
+        import subprocess
+        import sys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = os.path.join(tmp, "desktop_visualizer")
+            os.mkdir(fake)
+            with open(os.path.join(fake, "__init__.py"), "w") as f:
+                f.write("raise SystemExit('shadowed')\n")
+            with open(os.path.join(fake, "__main__.py"), "w") as f:
+                f.write("raise SystemExit('shadowed')\n")
+            result = subprocess.run(
+                [sys.executable, "-I", "-c", launcher.boot_code(launcher.PACKAGE.parent), "--version"],
+                cwd=tmp, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("desktop-visualizer", result.stdout)
 
 
 class CliTest(unittest.TestCase):

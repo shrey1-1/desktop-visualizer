@@ -53,15 +53,24 @@ def configure_platform():
     return False
 
 
+def boot_code(app_dir):
+    """Python code that runs the app from `app_dir`.
+
+    Used with `python -I -c`: isolated mode keeps the current folder (and PYTHONPATH)
+    off the import path, so a stray desktop_visualizer/ wherever you happen to run
+    the command can't shadow the installed one.
+    """
+    return (f"import sys; sys.path.insert(0, {str(app_dir)!r}); "
+            "from desktop_visualizer.__main__ import main; sys.exit(main())")
+
+
 def module_command(args):
-    return [sys.executable, "-m", "desktop_visualizer", *args]
+    return [sys.executable, "-I", "-c", boot_code(PACKAGE.parent), *args]
 
 
 def spawn(args):
     """Start `desktop-visualizer <args>` as a separate, detached process."""
     env = dict(ORIGINAL_ENV)
-    parent = str(PACKAGE.parent)
-    env["PYTHONPATH"] = os.pathsep.join(p for p in (parent, env.get("PYTHONPATH", "")) if p)
     log_dir = Path(env.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "desktop-visualizer"
     log_dir.mkdir(parents=True, exist_ok=True)
     with open(log_dir / "log.txt", "ab") as log:
@@ -81,8 +90,7 @@ def launcher_command():
     installed = os.environ.get("DESKTOP_VISUALIZER_LAUNCHER")
     if installed and Path(installed).exists():
         return shlex.quote(installed)
-    return " ".join(shlex.quote(part) for part in
-                    ["env", f"PYTHONPATH={PACKAGE.parent}", *module_command([])])
+    return " ".join(shlex.quote(part) for part in module_command([]))
 
 
 def autostart_enabled():

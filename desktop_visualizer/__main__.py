@@ -34,6 +34,15 @@ def parse_args(argv):
     return args
 
 
+def wait_until_closed(instance, timeout=8.0):
+    """Block until the overlay has really exited, so a following --start isn't mistaken for 'already running'."""
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and instance.send("overlay", "ping", timeout_ms=200):
+        time.sleep(0.1)
+
+
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
@@ -55,6 +64,8 @@ def main(argv=None):
         if instance.send("overlay", "ping"):
             return 0
     elif instance.send("overlay", running_command):
+        if running_command == "quit":
+            wait_until_closed(instance)
         return 0
 
     if args.action == "quit":
