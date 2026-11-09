@@ -1,0 +1,62 @@
+import os
+import tempfile
+import unittest
+from unittest import mock
+
+from desktop_visualizer import launcher
+from desktop_visualizer.__main__ import parse_args
+
+
+class BackendChoiceTest(unittest.TestCase):
+    def test_kde_wayland_uses_layer_shell(self):
+        env = {"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "KDE"}
+        self.assertEqual(launcher.choose_backend(env, has_layer_shell=True), "layer-shell")
+
+    def test_hyprland_uses_layer_shell(self):
+        env = {"WAYLAND_DISPLAY": "wayland-1", "XDG_CURRENT_DESKTOP": "Hyprland"}
+        self.assertEqual(launcher.choose_backend(env, has_layer_shell=True), "layer-shell")
+
+    def test_gnome_falls_back(self):
+        env = {"XDG_SESSION_TYPE": "wayland", "XDG_CURRENT_DESKTOP": "ubuntu:GNOME"}
+        self.assertEqual(launcher.choose_backend(env, has_layer_shell=True), "x11")
+
+    def test_without_plugin_or_on_x11(self):
+        self.assertEqual(launcher.choose_backend({"XDG_SESSION_TYPE": "wayland"}, has_layer_shell=False), "x11")
+        self.assertEqual(launcher.choose_backend({"XDG_SESSION_TYPE": "x11"}, has_layer_shell=True), "x11")
+
+    def test_override(self):
+        env = {"XDG_SESSION_TYPE": "wayland", "DESKTOP_VISUALIZER_BACKEND": "x11"}
+        self.assertEqual(launcher.choose_backend(env, has_layer_shell=True), "x11")
+
+
+class AutostartTest(unittest.TestCase):
+    def test_enable_and_disable(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {
+            "XDG_CONFIG_HOME": tmp, "DESKTOP_VISUALIZER_LAUNCHER": "/usr/bin/true",
+        }):
+            self.assertFalse(launcher.autostart_enabled())
+            launcher.set_autostart(True)
+            self.assertTrue(launcher.autostart_enabled())
+            text = launcher.autostart_path().read_text()
+            self.assertIn("Exec=/usr/bin/true --start", text)
+            launcher.set_autostart(False)
+            self.assertFalse(launcher.autostart_enabled())
+
+    def test_command_without_installed_launcher(self):
+        with mock.patch.dict(os.environ, {"DESKTOP_VISUALIZER_LAUNCHER": ""}):
+            command = launcher.launcher_command()
+        self.assertIn("-m desktop_visualizer", command)
+        self.assertIn("PYTHONPATH=", command)
+
+
+class CliTest(unittest.TestCase):
+    def test_actions(self):
+        self.assertEqual(parse_args([]).action, "toggle")
+        self.assertEqual(parse_args(["--start"]).action, "start")
+        self.assertEqual(parse_args(["--settings"]).action, "settings")
+        with self.assertRaises(SystemExit):
+            parse_args(["--start", "--quit"])
+
+
+if __name__ == "__main__":
+    unittest.main()

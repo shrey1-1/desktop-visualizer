@@ -1,0 +1,23 @@
+[Desktop Entry]
+Type=Application
+Name=Desktop Visualizer
+GenericName=Audio Visualizer
+Comment=Show or hide the music visualizer overlay
+Exec=@LAUNCHER@
+Icon=desktop-visualizer
+Terminal=false
+Categories=AudioVideo;Audio;
+Keywords=spotify;visualizer;music;rgb;openrgb;
+Actions=settings;edit;quit;
+
+[Desktop Action settings]
+Name=Settings
+Exec=@LAUNCHER@ --settings
+
+[Desktop Action edit]
+Name=Move / resize
+Exec=@LAUNCHER@ --edit
+
+[Desktop Action quit]
+Name=Close visualizer
+Exec=@LAUNCHER@ --quit

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="45%" r="60%">
+      <stop offset="0" stop-color="#2a1b5e"/>
+      <stop offset="1" stop-color="#0d0a1f"/>
+    </radialGradient>
+    <linearGradient id="dot" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5fd4ff"/>
+      <stop offset="1" stop-color="#ff4fd8"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bg)"/>
+  <circle cx="32" cy="32" r="24" fill="none" stroke="url(#dot)" stroke-opacity="0.35" stroke-width="3"/>
+  <g fill="url(#dot)"><circle cx="32.00" cy="10.33" r="1.39"/><circle cx="41.91" cy="12.95" r="1.43"/><circle cx="34.45" cy="12.95" r="1.67"/><circle cx="25.14" cy="12.95" r="1.59"/><circle cx="21.00" cy="12.95" r="1.24"/><circle cx="48.17" cy="17.86" r="1.43"/><circle cx="43.04" cy="17.86" r="1.76"/><circle cx="34.40" cy="17.86" r="1.92"/><circle cx="25.00" cy="17.86" r="1.86"/><circle cx="17.82" cy="17.86" r="1.61"/><circle cx="15.15" cy="17.86" r="1.24"/><circle cx="52.07" cy="24.48" r="1.44"/><circle cx="47.47" cy="24.48" r="1.80"/><circle cx="39.33" cy="24.48" r="2.03"/><circle cx="29.51" cy="24.48" r="2.07"/><circle cx="20.26" cy="24.48" r="1.93"/><circle cx="13.69" cy="24.48" r="1.63"/><circle cx="11.33" cy="24.48" r="1.23"/><circle cx="53.45" cy="32.00" r="1.44"/><circle cx="49.20" cy="32.00" r="1.80"/><circle cx="41.55" cy="32.00" r="2.05"/><circle cx="32.00" cy="32.00" r="2.13"/><circle cx="22.45" cy="32.00" r="2.05"/><circle cx="14.80" cy="32.00" r="1.80"/><circle cx="10.55" cy="32.00" r="1.44"/><circle cx="52.07" cy="39.52" r="1.44"/><circle cx="47.47" cy="39.52" r="1.80"/><circle cx="39.33" cy="39.52" r="2.03"/><circle cx="29.51" cy="39.52" r="2.07"/><circle cx="20.26" cy="39.52" r="1.93"/><circle cx="13.69" cy="39.52" r="1.63"/><circle cx="11.33" cy="39.52" r="1.23"/><circle cx="48.17" cy="46.14" r="1.43"/><circle cx="43.04" cy="46.14" r="1.76"/><circle cx="34.40" cy="46.14" r="1.92"/><circle cx="25.00" cy="46.14" r="1.86"/><circle cx="17.82" cy="46.14" r="1.61"/><circle cx="15.15" cy="46.14" r="1.24"/><circle cx="41.91" cy="51.05" r="1.43"/><circle cx="34.45" cy="51.05" r="1.67"/><circle cx="25.14" cy="51.05" r="1.59"/><circle cx="21.00" cy="51.05" r="1.24"/><circle cx="32.00" cy="53.67" r="1.39"/></g>
+</svg>

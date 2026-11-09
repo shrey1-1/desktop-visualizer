@@ -1,0 +1,60 @@
+# Maintainer: shrey1-1 <https://github.com/shrey1-1>
+pkgname=desktop-visualizer
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Spotify/system audio visualizer overlay for the Linux desktop (NCS visualizer), with OpenRGB sync"
+arch=('any')
+url="https://github.com/shrey1-1/desktop-visualizer"
+license=('MIT')
+depends=('python' 'pyside6' 'qt6-webengine' 'qt6-declarative' 'python-numpy' 'libpulse')
+optdepends=(
+	'layer-shell-qt: keep the overlay on top on KDE Plasma, Hyprland and Sway (Wayland)'
+	'playerctl: colours from the album cover'
+	'openrgb: sync keyboard and other RGB devices'
+)
+# For a local build from a checkout, run `makepkg` with LOCAL_SRC=/path/to/checkout.
+if [[ -n "${LOCAL_SRC:-}" ]]; then
+	source=()
+	sha256sums=()
+else
+	source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+	sha256sums=('SKIP')
+fi
+
+_srcdir() {
+	if [[ -n "${LOCAL_SRC:-}" ]]; then
+		echo "$LOCAL_SRC"
+	else
+		echo "$srcdir/$pkgname-$pkgver"
+	fi
+}
+
+check() {
+	cd "$(_srcdir)"
+	python -m unittest discover -s tests
+}
+
+package() {
+	local src
+	src="$(_srcdir)"
+	install -d "$pkgdir/usr/lib/$pkgname"
+	cp -r "$src/desktop_visualizer" "$pkgdir/usr/lib/$pkgname/"
+	find "$pkgdir/usr/lib/$pkgname" -name __pycache__ -type d -prune -exec rm -rf {} +
+	python -m compileall -q "$pkgdir/usr/lib/$pkgname/desktop_visualizer" -d "/usr/lib/$pkgname/desktop_visualizer"
+
+	install -d "$pkgdir/usr/bin"
+	cat >"$pkgdir/usr/bin/$pkgname" <<EOF
+#!/bin/sh
+export DESKTOP_VISUALIZER_LAUNCHER=/usr/bin/$pkgname
+export PYTHONPATH="/usr/lib/$pkgname\${PYTHONPATH:+:\$PYTHONPATH}"
+exec /usr/bin/python3 -m desktop_visualizer "\$@"
+EOF
+	chmod 755 "$pkgdir/usr/bin/$pkgname"
+
+	sed "s|@LAUNCHER@|$pkgname|g" "$src/data/$pkgname.desktop" |
+		install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/$pkgname.desktop"
+	install -Dm644 "$src/desktop_visualizer/data/$pkgname.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/$pkgname.svg"
+	install -Dm644 "$src/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+	install -Dm644 "$src/LICENSE-spicetify-visualizer" "$pkgdir/usr/share/licenses/$pkgname/LICENSE-spicetify-visualizer"
+	install -Dm644 "$src/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
