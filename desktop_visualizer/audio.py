@@ -59,17 +59,26 @@ class LevelMeter:
     def __init__(self, gain=None, hop_seconds=HOP_SECONDS, window_seconds=WINDOW_SECONDS):
         self.gain = gain
         self.window = np.zeros(int(SAMPLE_RATE * window_seconds), dtype=np.float32)
+        self.position = 0
         self.peak = 0.0
         self.decay = 0.5 ** (hop_seconds / self.PEAK_HALF_LIFE)
 
     def feed(self, samples):
         n = len(samples)
-        if n >= len(self.window):
-            self.window[:] = samples[-len(self.window):]
+        size = len(self.window)
+        if n >= size:
+            self.window[:] = samples[-size:]
+            self.position = 0
         else:
-            self.window = np.roll(self.window, -n)
-            self.window[-n:] = samples
-        rms = float(np.sqrt(np.mean(np.square(self.window, dtype=np.float64))))
+            end = self.position + n
+            if end <= size:
+                self.window[self.position:end] = samples
+            else:
+                first = size - self.position
+                self.window[self.position:] = samples[:first]
+                self.window[:end - size] = samples[first:]
+            self.position = end % size
+        rms = float(np.sqrt(np.dot(self.window, self.window) / size))
         if rms < self.NOISE_FLOOR:
             rms = 0.0
 

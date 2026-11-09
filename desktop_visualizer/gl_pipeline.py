@@ -186,7 +186,7 @@ class Pipeline:
             gl.glEnable(GL_PROGRAM_POINT_SIZE)
 
         amplitude = state.amplitude
-        dot_radius = 0.9 / DOT_COUNT
+        dot_radius = 1.25 * 0.9 / DOT_COUNT
         dot_radius_px = dot_radius * 0.5 * size
         sphere_radius = amplitude * (0.9 - 0.75 * 0.9) + 0.75 * 0.9
         feather = (amplitude + 3) ** 2 * (45 / 1568)

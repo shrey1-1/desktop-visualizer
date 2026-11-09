@@ -125,6 +125,7 @@ class Visualizer(QQuickFramebufferObject):
     shownChanged = Signal()
     runningChanged = Signal()
     errorChanged = Signal()
+    frameRateChanged = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -138,7 +139,6 @@ class Visualizer(QQuickFramebufferObject):
         self._shown = False
         self._running = False
         self._error = ""
-        self._last_frame = 0.0
         self.fps_log = os.environ.get("DESKTOP_VISUALIZER_FPS") == "1"
         self._fps = {"frames": 0, "start": None, "worst": 0.0, "last": None}
         self._renderer = None
@@ -176,12 +176,6 @@ class Visualizer(QQuickFramebufferObject):
             if self.opacity() <= 0.001:
                 self._set_running(False)  # faded out: stop until sound returns
                 return
-        if self.frame_rate > 0:
-            # Below the display's rate: skip refreshes until the next frame is due.
-            interval = 1.0 / self.frame_rate
-            if now - self._last_frame < interval - 0.0015:
-                return
-            self._last_frame = now if now - self._last_frame > 2 * interval else self._last_frame + interval
         self._log_fps(now)
         self.update()
 
@@ -206,6 +200,11 @@ class Visualizer(QQuickFramebufferObject):
         return self._error
 
     error = Property(str, _get_error, notify=errorChanged)
+
+    def _get_frame_rate(self):
+        return self.frame_rate
+
+    frameRate = Property(int, _get_frame_rate, notify=frameRateChanged)
 
     # ---- inputs (called from the overlay) ----
 
@@ -244,7 +243,10 @@ class Visualizer(QQuickFramebufferObject):
 
     @Slot(int)
     def setFrameRate(self, rate):
-        self.frame_rate = max(0, min(rate, 360))
+        rate = max(0, min(rate, 360))
+        if rate != self.frame_rate:
+            self.frame_rate = rate
+            self.frameRateChanged.emit()
 
     # ---- frame loop ----
 
