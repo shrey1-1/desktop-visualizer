@@ -57,7 +57,7 @@ class Animator:
     def push_level(self, level, now):
         self.level = min(max(level, 0.0), 1.0)
         self.level_time = now
-        if self.level > 0.01:
+        if self.level > 0.0:
             self.silent_for = 0.0
 
     def new_track(self):
@@ -71,7 +71,7 @@ class Animator:
         self.amplitude += (target - self.amplitude) * (1 - math.exp(-dt / AMPLITUDE_SMOOTHING))
         self.time += dt
         self.integral += self.amplitude * dt
-        if target <= 0.01:
+        if target <= 0.0:
             self.silent_for += dt
 
     @property
@@ -211,7 +211,7 @@ class Visualizer(QQuickFramebufferObject):
     @Slot(float)
     def pushLevel(self, level):
         self.anim.push_level(level, time.monotonic())
-        if level > 0.01:
+        if level > 0.0:
             self._set_shown(True)
             self._start()
 

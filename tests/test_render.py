@@ -32,6 +32,13 @@ class AnimatorTest(unittest.TestCase):
         self.assertLess(a.amplitude, 0.01)
         self.assertGreater(a.silent_for, 0.5)
 
+    def test_quiet_audio_does_not_count_as_silence(self):
+        a = Animator()
+        for i in range(100):
+            a.push_level(0.005, i * 0.01)
+            a.step(i * 0.01)
+        self.assertEqual(a.silent_for, 0.0)
+
     def test_noise_offset_grows_with_time_and_loudness(self):
         quiet, loud = Animator(), Animator()
         for a, level in ((quiet, 0.1), (loud, 0.9)):
