@@ -199,6 +199,24 @@ ApplicationWindow {
 
         // ---------------- Colours ----------------
         SettingsPage {
+            Section { text: "Style" }
+            SettingCombo {
+                key: "style"
+                options: [["Dot sphere (the original)", "sphere"], ["Sphere with a spectrum ring", "sphere_ring"],
+                          ["Spectrum ring", "ring"], ["Equalizer bars", "bars"], ["Waveform circle", "wave"],
+                          ["Beat pulse", "pulse"]]
+            }
+            Hint {
+                text: ({
+                    "sphere": "100,000 dots that swell with the music. The heaviest style: smooth on a dedicated GPU, 25–40 FPS on integrated graphics.",
+                    "sphere_ring": "The dot sphere, smaller, inside a ring of frequency bars (bass at the bottom, treble at the top).",
+                    "ring": "Frequency bars around a circle: bass at the bottom, treble at the top. Very light, smooth even on battery.",
+                    "bars": "A mirrored equalizer, bass on the left, treble on the right. Very light.",
+                    "wave": "The actual sound wave, wrapped into a glowing circle. Very light.",
+                    "pulse": "A glowing orb that breathes with the volume and sends out a ripple on every kick drum. Very light."
+                })[s.style] || ""
+            }
+
             Section { text: "Colour source" }
             SettingCombo {
                 key: "colour_mode"

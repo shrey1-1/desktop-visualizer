@@ -25,6 +25,8 @@ GL_SCISSOR_TEST = 0x0C11
 GL_STENCIL_TEST = 0x0B90
 GL_CULL_FACE = 0x0B44
 GL_FUNC_ADD = 0x8006
+GL_ONE = 1
+GL_ONE_MINUS_SRC_ALPHA = 0x0303
 GL_MAX = 0x8008
 GL_PROGRAM_POINT_SIZE = 0x8642
 GL_TEXTURE_2D = 0x0DE1
@@ -50,6 +52,10 @@ class RenderTarget:
     size: int
 
 
+STYLES = ("sphere", "sphere_ring", "ring", "bars", "wave", "pulse")
+SPHERE_RING_SCALE = 0.72  # sphere size inside the ring for "sphere_ring"
+
+
 @dataclass
 class FrameState:
     amplitude: float = 0.0
@@ -58,6 +64,10 @@ class FrameState:
     colour: tuple = (0x53 / 255,) * 3
     colour2: tuple = (0x53 / 255,) * 3
     gradient_style: int = 0  # 0 solid, 1 vertical, 2 diagonal, 3 radial
+    style: str = "sphere"
+    bands: tuple = (0.0,) * 64  # 0..1 per frequency band, bass first
+    wave: tuple = (0.0,) * 128  # -1..1 waveform
+    rings: tuple = (-1.0,) * 8  # ages of pulse ripples in seconds, negative = unused
 
 
 def shader_source(source, gles):
@@ -101,6 +111,7 @@ class Pipeline:
                                                     QOpenGLTexture.Filter.Nearest)
         self.size = 0
         self.dot_fbo = self.blur_x_fbo = self.blur_y_fbo = None
+        self.styles = {}  # extra style programs, compiled on first use
 
     # ---- setup ----
 
@@ -178,6 +189,66 @@ class Pipeline:
         size = min(target.width(), target.height())
         if size <= 0:
             return
+        if state.style == "sphere_ring":
+            self._render_sphere(target, state, size, SPHERE_RING_SCALE)
+            self._render_style(target, state, size, "ring", clear=False)
+        elif state.style in ("ring", "bars", "wave", "pulse"):
+            self._render_style(target, state, size, state.style, clear=True)
+        else:
+            self._render_sphere(target, state, size, 1.0)
+
+    def _style_program(self, name):
+        if name not in self.styles:
+            fragment = {"ring": shaders.RING_FRAGMENT, "bars": shaders.BARS_FRAGMENT,
+                        "wave": shaders.WAVE_FRAGMENT, "pulse": shaders.PULSE_FRAGMENT}[name]
+            self.styles[name] = self._program(self.is_gles, shaders.STYLE_VERTEX, fragment, name)
+        return self.styles[name]
+
+    def _render_style(self, target, state, size, name, clear):
+        """One-pass styles, drawn straight into the target."""
+        gl = self.gl
+        for cap in (GL_DEPTH_TEST, GL_STENCIL_TEST, GL_SCISSOR_TEST, GL_CULL_FACE):
+            gl.glDisable(cap)
+        program = self._style_program(name)
+        self.vao.bind()
+        self.quad.bind()
+        target.bind()
+        gl.glViewport(0, 0, size, size)
+        if clear:
+            gl.glClearColor(0, 0, 0, 0)
+            gl.glClear(GL_COLOR_BUFFER_BIT)
+            gl.glDisable(GL_BLEND)
+        else:
+            # Over the sphere: premultiplied "over" blending.
+            gl.glEnable(GL_BLEND)
+            gl.glBlendEquation(GL_FUNC_ADD)
+            gl.glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA)
+        program.bind()
+        program.setUniformValue("uOutputColor", *map(float, state.colour))
+        program.setUniformValue("uOutputColor2", *map(float, state.colour2))
+        program.setUniformValue1i("uGradientStyle", int(state.gradient_style))
+        program.setUniformValue1f("uAmplitude", float(state.amplitude))
+        if name == "ring":
+            inner, length = (0.70, 0.26) if not clear else (0.55, 0.38)
+            program.setUniformValue1f("uInner", inner)
+            program.setUniformValue1f("uLength", length)
+        if name in ("ring", "bars"):
+            program.setUniformValueArray(program.uniformLocation("uBands"), [float(v) for v in state.bands], 64, 1)
+        elif name == "wave":
+            program.setUniformValueArray(program.uniformLocation("uWave"), [float(v) for v in state.wave], 128, 1)
+        elif name == "pulse":
+            program.setUniformValueArray(program.uniformLocation("uRings"), [float(v) for v in state.rings], 8, 1)
+        self._quad(program)
+        program.release()
+        gl.glDisable(GL_BLEND)
+        self.quad.release()
+        self.vao.release()
+
+    def _render_sphere(self, target, state, size, scale):
+        """The original dot sphere. With scale < 1 it's drawn smaller, centred."""
+        full_size = size
+        size = max(1, round(full_size * scale))
+        offset = (full_size - size) // 2
         self._resize(size)
         gl = self.gl
         for cap in (GL_DEPTH_TEST, GL_STENCIL_TEST, GL_SCISSOR_TEST, GL_CULL_FACE):
@@ -242,7 +313,8 @@ class Pipeline:
         self._quad(b)
 
         # combine glow and dots into the target, premultiplied for a transparent window
-        self._target(target, size)
+        self._target(target, full_size)
+        gl.glViewport(offset, offset, size, size)
         f = self.finalize
         f.bind()
         f.setUniformValue("uOutputColor", *map(float, state.colour))

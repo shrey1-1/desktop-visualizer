@@ -258,3 +258,150 @@ void main() {
     outColor = vec4(color * value, value);
 }
 """
+
+
+# ---- extra styles (one pass each, drawn straight into the target) ----
+# All share the gradient colouring of FINALIZE_FRAGMENT and output premultiplied colour.
+
+STYLE_VERTEX = """\
+in vec2 inPosition;
+out vec2 fragUV;
+
+void main() {
+    gl_Position = vec4(inPosition, 0.0, 1.0);
+    fragUV = (inPosition + 1.0) / 2.0;
+}
+"""
+
+_STYLE_COMMON = """\
+precision highp float;
+
+uniform vec3 uOutputColor;
+uniform vec3 uOutputColor2;
+uniform int uGradientStyle; // 0 solid, 1 vertical, 2 diagonal, 3 radial
+uniform float uAmplitude;
+
+in vec2 fragUV;
+out vec4 outColor;
+
+const float TAU = 6.28318530718;
+
+vec3 paint() {
+    float t = 0.0;
+    if (uGradientStyle == 1) t = fragUV.y;
+    else if (uGradientStyle == 2) t = (fragUV.x + fragUV.y) * 0.5;
+    else if (uGradientStyle == 3) t = clamp(length(fragUV - 0.5) * 2.2, 0.0, 1.0);
+    return mix(uOutputColor, uOutputColor2, smoothstep(0.1, 0.9, t));
+}
+
+void emit(float value) {
+    value = clamp(value, 0.0, 1.0);
+    outColor = vec4(paint() * value, value);
+}
+
+// 0 at the bottom of the circle, 1 at the top, the same on both sides (mirrored).
+float mirroredAngle(vec2 p) {
+    return abs(atan(p.x, -p.y)) / (TAU * 0.5);
+}
+"""
+
+RING_FRAGMENT = _STYLE_COMMON + """\
+uniform float uBands[64];
+uniform float uInner;   // radius where the bars start
+uniform float uLength;  // longest bar
+
+void main() {
+    vec2 p = fragUV * 2.0 - 1.0;
+    float r = length(p);
+    float aa = fwidth(r) * 1.5;
+
+    float slot = mirroredAngle(p) * 64.0;          // bass at the bottom, treble at the top
+    int i = int(min(floor(slot), 63.0));
+    float f = fract(slot);
+    float level = uBands[i];
+    float outer = uInner + uLength * (0.06 + level);
+
+    float across = abs(f - 0.5);
+    float bar = smoothstep(0.36, 0.28, across)
+              * smoothstep(-aa, aa, r - uInner) * smoothstep(aa, -aa, r - outer);
+    float halo = smoothstep(0.5, 0.15, across) * step(uInner, r) * exp(-max(r - outer, 0.0) * 22.0) * 0.4;
+    float base = exp(-abs(r - uInner) * 45.0) * (0.35 + 0.4 * uAmplitude);
+    emit(max(max(bar, halo), base));
+}
+"""
+
+BARS_FRAGMENT = _STYLE_COMMON + """\
+uniform float uBands[64];
+
+const float COUNT = 48.0;
+
+void main() {
+    vec2 p = fragUV * 2.0 - 1.0;
+    float aa = fwidth(p.y) * 1.5;
+    float x = (p.x + 0.9) / 1.8;                    // bars span the middle 90 %
+    float inside = step(0.0, x) * step(x, 1.0);
+    float slot = clamp(x, 0.0, 0.9999) * COUNT;
+    int i = int(floor(slot * 64.0 / COUNT));         // bass on the left
+    float f = fract(slot);
+    float height = 0.03 + 0.82 * uBands[i];
+
+    float across = abs(f - 0.5);
+    float y = abs(p.y);                              // mirrored above and below the middle
+    float bar = smoothstep(0.38, 0.3, across) * smoothstep(aa, -aa, y - height);
+    bar *= 0.6 + 0.4 * (1.0 - y / max(height, 0.01));   // brighter towards the middle
+    float halo = smoothstep(0.5, 0.2, across) * exp(-max(y - height, 0.0) * 20.0) * 0.35;
+    float line = exp(-y * 70.0) * (0.25 + 0.35 * uAmplitude);
+    emit(inside * max(max(bar, halo), line));
+}
+"""
+
+WAVE_FRAGMENT = _STYLE_COMMON + """\
+uniform float uWave[128];
+
+float waveAt(float m) {                               // m in 0..1, mirrored around the circle
+    float idx = m * 127.0;
+    int i0 = int(floor(idx));
+    int i1 = min(i0 + 1, 127);
+    return mix(uWave[i0], uWave[i1], fract(idx));
+}
+
+float lineAt(float r, float radius, float thickness, float aa) {
+    float d = abs(r - radius);
+    return smoothstep(thickness + aa, thickness - aa, d) + exp(-d * 32.0) * 0.45;
+}
+
+void main() {
+    vec2 p = fragUV * 2.0 - 1.0;
+    float r = length(p);
+    float aa = fwidth(r) * 1.5;
+    float w = waveAt(mirroredAngle(p));
+    float base = 0.55 + 0.06 * uAmplitude;
+
+    float outline = lineAt(r, base + 0.24 * w, 0.010, aa);
+    float echo = lineAt(r, base - 0.07 + 0.12 * w, 0.006, aa) * 0.45;
+    float fill = step(r, base + 0.24 * w) * 0.05;
+    emit(max(max(outline, echo), fill));
+}
+"""
+
+PULSE_FRAGMENT = _STYLE_COMMON + """\
+uniform float uRings[8];   // age in seconds of each ripple, negative = unused
+
+void main() {
+    vec2 p = fragUV * 2.0 - 1.0;
+    float r = length(p);
+    float aa = fwidth(r) * 1.5;
+    float core = 0.16 + 0.12 * uAmplitude;
+
+    float value = smoothstep(core + aa, core - aa, r) * 0.85 + exp(-max(r - core, 0.0) * 9.0) * 0.45;
+    for (int k = 0; k < 8; k++) {
+        float age = uRings[k];
+        if (age < 0.0) continue;
+        float radius = core + age * 0.8;
+        float fade = clamp(1.0 - age / 1.1, 0.0, 1.0);
+        float width = 0.012 + age * 0.03;
+        value = max(value, exp(-abs(r - radius) / width) * fade * fade * 0.9);
+    }
+    emit(value);
+}
+"""

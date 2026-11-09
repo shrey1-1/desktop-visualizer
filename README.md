@@ -4,6 +4,7 @@ The NCS visualizer from [Konsl/spicetify-visualizer](https://github.com/Konsl/sp
 running on your Linux desktop and reacting live to your music.
 
 - A glowing sphere of dots that moves with the music and floats over your windows. Clicks pass through it.
+- Five more styles: sphere with a spectrum ring, spectrum ring, equalizer bars, waveform circle and beat pulse.
 - Works with Spotify, or with any audio playing on your computer.
 - Colours from the album cover, a fixed colour, random colours, a rainbow cycle or colour palettes, with optional gradients.
 - Can make your keyboard, mouse and other RGB lighting match, through [OpenRGB](https://openrgb.org).
@@ -148,7 +149,7 @@ Changes apply instantly. You don't need to restart anything.
 
 | Tab | Options |
 | --- | --- |
-| **Colours** | Where the colour comes from: the **album cover** (default), **one fixed colour**, **random** (every song or every few seconds), a **rainbow** cycle, or a **palette** cycle (Neon, Synthwave, Sunset, Ocean, Forest, Fire, Ice, Candy). Add a **second colour** for a gradient. Adjust brightness, saturation and fade speed. |
+| **Colours** | **Style**: the original dot sphere, sphere with a spectrum ring, spectrum ring, equalizer bars, waveform circle or beat pulse. Where the colour comes from: the **album cover** (default), **one fixed colour**, **random** (every song or every few seconds), a **rainbow** cycle, or a **palette** cycle (Neon, Synthwave, Sunset, Ocean, Forest, Fire, Ice, Candy). Add a **second colour** for a gradient. Adjust brightness, saturation and fade speed. |
 | **Keyboard RGB** | Make your keyboard and other RGB devices match the visualizer ([setup below](#keyboard-and-rgb-lighting)). |
 | **Display** | Size, see-through amount, and **where it shows**: on top of windows, on top of everything (even fullscreen games and videos), or **desktop only** (behind all windows, like a live wallpaper). **Frame rate** (match your display, or limit it to save battery) and, on laptops with two GPUs, which **graphics card** to use. Choose whether it fades out when the music stops. |
 | **Audio** | **Spotify only** or **all system audio**. Sensitivity is automatic, or you can set it yourself. |
@@ -210,10 +211,11 @@ Check that OpenRGB is running with its SDK server started (see step 3 above), th
 devices** in Settings → Keyboard RGB. Messages are in `~/.cache/desktop-visualizer/log.txt`.
 
 **It isn't smooth / the frame rate is low.**
-The sphere is drawn from about 100,000 dots, which is heavy work for integrated graphics. On
+The dot sphere is drawn from about 100,000 dots, which is heavy work for integrated graphics. On
 laptops with a dedicated GPU, Settings → Display → *Graphics card* → **Dedicated** is the fastest
-option (*Automatic* already uses it while plugged in). On integrated graphics alone, expect
-roughly 25–40 FPS. To see the actual frame rate, run:
+option (*Automatic* already uses it while plugged in). On integrated graphics alone the sphere
+manages roughly 25–90 FPS depending on the GPU, while the other styles (spectrum ring, bars,
+waveform, beat pulse) are about 20× lighter and stay smooth even on battery. To see the actual frame rate, run:
 `DESKTOP_VISUALIZER_FPS=1 desktop-visualizer --foreground`. Add `DESKTOP_VISUALIZER_DEMO=1` to
 animate it with a fake beat, without music.
 
@@ -239,6 +241,8 @@ set `DESKTOP_VISUALIZER_BACKEND=layer-shell` or `x11`.
   audio") and records it with `parec`. It turns each 20 ms of sound into a loudness level.
 - `track.py` reads the current song with `playerctl`. Each song gets its own dot pattern, and the
   album cover provides the colour.
+- `analysis.py` splits the audio into 64 frequency bands (FFT), a short waveform and kick-drum
+  beats, for the styles other than the sphere. It only runs when one of those is selected.
 - `colours.py` decides the colours from your settings. `openrgb.py` is a small OpenRGB client
   that needs no extra packages.
 - `shaders.py`, `gl_pipeline.py` and `visualizer_item.py` draw the visualizer with OpenGL inside a

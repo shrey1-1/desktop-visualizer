@@ -11,13 +11,14 @@ import os
 import sys
 import time
 
+import numpy as np
 import shiboken6
 
 from PySide6.QtCore import Property, Qt, QTimer, Signal, Slot
 from PySide6.QtOpenGL import QOpenGLFramebufferObject, QOpenGLFramebufferObjectFormat
 from PySide6.QtQuick import QQuickFramebufferObject, QQuickOpenGLUtils
 
-from .gl_pipeline import FrameState, Pipeline
+from .gl_pipeline import STYLES, FrameState, Pipeline
 
 AMPLITUDE_SMOOTHING = 0.06  # seconds, time constant of the level smoothing
 SIGNAL_TIMEOUT = 0.15  # seconds without a level update before treating it as silence
@@ -79,6 +80,41 @@ class Animator:
         return (0.5 * self.time + self.integral) * 75 * 0.01
 
 
+class StyleAnimator:
+    """Per-frame motion for the non-sphere styles: smoothed bands and beat ripples."""
+
+    RISE = 0.025  # seconds: bars jump up quickly...
+    FALL = 0.12  # ...and settle down more slowly
+    RING_LIFE = 1.1  # seconds a ripple lasts
+
+    def __init__(self):
+        self.target = np.zeros(64, dtype=np.float32)
+        self.bands = np.zeros(64, dtype=np.float32)
+        self.wave = np.zeros(128, dtype=np.float32)
+        self.rings = [-1.0] * 8
+
+    def set_analysis(self, bands, wave, beat):
+        if len(bands) == 64:
+            self.target = np.asarray(bands, dtype=np.float32)
+        if len(wave) == 128:
+            self.wave = np.asarray(wave, dtype=np.float32)
+        if beat:
+            free = [i for i, age in enumerate(self.rings) if age < 0]
+            slot = free[0] if free else max(range(8), key=lambda i: self.rings[i])
+            self.rings[slot] = 0.0
+
+    def silence(self):
+        self.target[:] = 0.0
+        self.wave[:] = 0.0
+
+    def step(self, dt):
+        rising = self.target > self.bands
+        rate = np.where(rising, 1 - math.exp(-dt / self.RISE), 1 - math.exp(-dt / self.FALL))
+        self.bands += (self.target - self.bands) * rate
+        self.rings = [age + dt if 0 <= age + dt < self.RING_LIFE else -1.0 if age >= 0 else age
+                      for age in self.rings]
+
+
 class VisualizerRenderer(QQuickFramebufferObject.Renderer):
     def __init__(self):
         super().__init__()
@@ -136,6 +172,8 @@ class Visualizer(QQuickFramebufferObject):
         self.fade_delay = 2.0
         self.editing = False
         self.frame_rate = 0  # 0 = every display refresh
+        self.style = "sphere"
+        self.style_anim = StyleAnimator()
         self._shown = False
         self._running = False
         self._error = ""
@@ -161,8 +199,14 @@ class Visualizer(QQuickFramebufferObject):
 
     def frame_state(self):
         c = self.colours
-        return FrameState(amplitude=self.anim.amplitude, noise_offset=self.anim.noise_offset, seed=self.seed,
-                          colour=tuple(c[0:3]), colour2=tuple(c[3:6]), gradient_style=int(c[6]))
+        state = FrameState(amplitude=self.anim.amplitude, noise_offset=self.anim.noise_offset, seed=self.seed,
+                           colour=tuple(c[0:3]), colour2=tuple(c[3:6]), gradient_style=int(c[6]), style=self.style)
+        if self.style != "sphere":
+            s = self.style_anim
+            state.bands = tuple(s.bands.tolist())
+            state.wave = tuple(s.wave.tolist())
+            state.rings = tuple(s.rings)
+        return state
 
     @Slot()
     def tick(self):
@@ -170,7 +214,12 @@ class Visualizer(QQuickFramebufferObject):
         if not self._running:
             return
         now = time.monotonic()
+        last = self.anim.last
         self.anim.step(now)
+        if self.style != "sphere":
+            if now - self.anim.level_time > 0.15:
+                self.style_anim.silence()  # no audio coming in: let the bars fall
+            self.style_anim.step(0.0 if last is None else min(now - last, 0.1))
         if self.fade_when_silent and not self.editing and self.anim.silent_for >= self.fade_delay:
             self._set_shown(False)
             if self.opacity() <= 0.001:
@@ -240,6 +289,15 @@ class Visualizer(QQuickFramebufferObject):
         if editing:
             self._set_shown(True)
             self._start()
+
+    @Slot("QVariantList", "QVariantList", bool)
+    def setAnalysis(self, bands, wave, beat):
+        self.style_anim.set_analysis(bands, wave, beat)
+
+    @Slot(str)
+    def setStyle(self, style):
+        self.style = style if style in STYLES else "sphere"
+        self.update()
 
     @Slot(int)
     def setFrameRate(self, rate):

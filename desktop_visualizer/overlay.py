@@ -1,6 +1,5 @@
 """The overlay process: transparent visualizer window, tray icon, audio, colours and RGB sync."""
 
-import math
 import os
 import signal
 import sys
@@ -40,6 +39,7 @@ class OverlayApp(QObject):
     rgbStatus = Signal(str)
     frameRateChanged = Signal()
     restartRequested = Signal()
+    analysis = Signal("QVariantList", "QVariantList", bool)  # bands, waveform, beat
 
     def __init__(self, layer_shell, gpu, parent=None):
         super().__init__(parent)
@@ -55,7 +55,8 @@ class OverlayApp(QObject):
         self.started = time.monotonic()
 
         self.engine = ColourEngine(self._settings)
-        self.audio = AudioCapture(self.level.emit, **self._audio_options())
+        self.audio = AudioCapture(self.level.emit, on_analysis=self.analysis.emit, **self._audio_options())
+        self.audio.analysis_enabled = self._settings["style"] != "sphere"
         self.rgb = RGBSync(on_status=self.rgbStatus.emit)
         self.rgb.configure(self._settings)
         self.tracks = TrackWatcher(player=self._player())
@@ -82,10 +83,17 @@ class OverlayApp(QObject):
     def start(self):
         self.audio.start()
         if os.environ.get("DESKTOP_VISUALIZER_DEMO") == "1":
-            # Troubleshooting/benchmark switch: animate with a fake beat instead of audio.
-            started = time.monotonic()
-            self.demo_timer = QTimer(self, interval=20, timeout=lambda: self.level.emit(
-                0.45 + 0.35 * abs(math.sin((time.monotonic() - started) * 3.1)) * abs(math.sin((time.monotonic() - started) * 0.7))))
+            # Troubleshooting/benchmark switch: animate with a synthetic song instead of audio.
+            from .demo import DemoSong
+            song = DemoSong()
+
+            def demo_step():
+                level, bands, wave, beat = song.step()
+                self.level.emit(level)
+                if self._settings["style"] != "sphere":
+                    self.analysis.emit(bands, wave, beat)
+
+            self.demo_timer = QTimer(self, interval=20, timeout=demo_step)
             self.demo_timer.start()
         self.rgb.start()
         self.tracks.start()
@@ -155,6 +163,7 @@ class OverlayApp(QObject):
             return
         self._settings = new
         self.audio.configure(**self._audio_options())
+        self.audio.analysis_enabled = new["style"] != "sphere"  # the sphere only needs the level
         self.tracks.set_player(self._player())
         self.engine.apply_settings(new, now=self._now())
         self.rgb.configure(new)

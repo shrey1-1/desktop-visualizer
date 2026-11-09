@@ -9,6 +9,8 @@ import time
 
 import numpy as np
 
+from .analysis import Analyzer
+
 SAMPLE_RATE = 48000
 HOP_SECONDS = 0.02  # how often a level is reported
 WINDOW_SECONDS = 0.12  # RMS window, close to the original's 0.15 s moving average
@@ -101,10 +103,14 @@ class AudioCapture(threading.Thread):
     playing on the default output.
     """
 
-    def __init__(self, on_level, source="spotify", gain=None):
+    def __init__(self, on_level, source="spotify", gain=None, on_analysis=None):
         super().__init__(daemon=True, name="audio-capture")
         self.on_level = on_level
         self.meter = LevelMeter(gain)
+        # Spectrum/waveform/beat for the non-sphere styles; only computed while enabled.
+        self.on_analysis = on_analysis
+        self.analyzer = Analyzer(SAMPLE_RATE, HOP_SECONDS)
+        self.analysis_enabled = False
         self.source = source
         self.restart = threading.Event()
         self.stopping = threading.Event()
@@ -192,6 +198,9 @@ class AudioCapture(threading.Thread):
                 if math.isfinite(level):
                     try:
                         self.on_level(level)
+                        if self.analysis_enabled and self.on_analysis is not None:
+                            bands, wave, beat = self.analyzer.feed(samples)
+                            self.on_analysis(bands.tolist(), wave.tolist(), bool(beat))
                     except RuntimeError:  # receiver already destroyed during shutdown
                         self.stopping.set()
                         break

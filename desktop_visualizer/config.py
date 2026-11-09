@@ -76,6 +76,8 @@ SCHEMA = {
     "layer": ("top", _choice("top", "overlay", "bottom")),  # bottom = desktop only, behind windows
     "fade_when_silent": (True, _boolean),
     "fade_delay": (2.0, _number(0.5, 30.0)),
+    # Look: "sphere" is the original; the others use live frequency data
+    "style": ("sphere", _choice("sphere", "sphere_ring", "ring", "bars", "wave", "pulse")),
     # Performance
     "gpu": ("auto", _choice("auto", "dedicated", "integrated")),  # auto = dedicated when plugged in
     "frame_rate": (0, _number(0, 360, integer=True)),  # 0 = match the display's refresh rate

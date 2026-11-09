@@ -86,6 +86,7 @@ Window {
         view.setFade(settings.fade_when_silent, settings.fade_delay);
         view.setEditing(app.editing);
         view.setFrameRate(app.frameRate);
+        view.setStyle(settings.style);
     }
 
     Component.onCompleted: {
@@ -100,6 +101,10 @@ Window {
             view.pushLevel(value);
         }
 
+        function onAnalysis(bands, wave, beat) {
+            view.setAnalysis(bands, wave, beat);
+        }
+
         function onSeedChanged() {
             view.setTrack(app.seed);
         }
@@ -110,6 +115,7 @@ Window {
 
         function onSettingsChanged() {
             view.setFade(root.settings.fade_when_silent, root.settings.fade_delay);
+            view.setStyle(root.settings.style);
             if (!app.editing && Math.round(root.boxSize) !== root.settings.size) {
                 // Size changed in the settings window: resize around the centre.
                 const old = root.boxSize;
@@ -163,6 +169,9 @@ Window {
             id: view
 
             anchors.fill: parent
+            // The OpenGL passes draw with the origin at the bottom-left; show them upright
+            // (gradients top-to-bottom, bass at the bottom, as in the original).
+            mirrorVertically: true
             // Fades out when the music stops (the item then stops drawing) and back in when it returns.
             opacity: shown ? root.settings.opacity : 0
 
