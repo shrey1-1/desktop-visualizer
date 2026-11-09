@@ -1,11 +1,14 @@
-// Shaders from Konsl/spicetify-visualizer (MIT), src/shaders/ncs-visualizer/.
-// particle, dot and blur are unchanged; finalize adds an optional two-colour gradient.
-// See LICENSE-spicetify-visualizer.
+"""GLSL shaders for the visualizer.
 
-window.SHADERS = {
-	particle: {
-		vertex: `#version 300 es
+From Konsl/spicetify-visualizer (MIT), src/shaders/ncs-visualizer/ (see LICENSE-spicetify-visualizer).
+particle and blur are unchanged; dot draws one point per dot instead of an instanced quad
+(much faster); finalize adds the optional two-colour gradient.
 
+The sources have no #version line: gl_pipeline.py adds "#version 330 core" for desktop
+OpenGL or "#version 300 es" for OpenGL ES, which accept the same code here.
+"""
+
+PARTICLE_VERTEX = """\
 in vec2 inPosition;
 out vec2 fragUV;
 
@@ -13,8 +16,9 @@ void main() {
     gl_Position = vec4(inPosition, 0.0, 1.0);
     fragUV = (inPosition + 1.0) / 2.0;
 }
-`,
-		fragment: `#version 300 es
+"""
+
+PARTICLE_FRAGMENT = """\
 precision highp float;
 
 uniform float uNoiseOffset;
@@ -118,47 +122,43 @@ void main() {
     dotCenter.y *= -1.0;
     outColor = dotCenter.xy;
 }
-`
-	},
-	dot: {
-		vertex: `#version 300 es
+"""
 
+DOT_VERTEX = """\
 uniform int uDotCount;
 uniform float uDotRadius;
 uniform float uDotRadiusPX;
+uniform float uViewportSize;
 
 uniform sampler2D uParticleTexture;
 
-in vec2 inPosition;
-
-out vec2 fragUV;
 out float fragDotRadiusPX;
 
 void main() {
-    ivec2 dotIndex = ivec2(gl_InstanceID % uDotCount, gl_InstanceID / uDotCount);
+    ivec2 dotIndex = ivec2(gl_VertexID % uDotCount, gl_VertexID / uDotCount);
     vec2 dotCenter = texelFetch(uParticleTexture, dotIndex, 0).xy;
 
-    gl_Position = vec4(dotCenter + inPosition * uDotRadius * (1.0 + 1.0 / uDotRadiusPX), 0.0, 1.0);
-    fragUV = inPosition;
+    gl_Position = vec4(dotCenter, 0.0, 1.0);
+    // The original quad spanned uDotRadius * (1 + 1 / uDotRadiusPX) on each side of the centre.
+    gl_PointSize = uDotRadius * (1.0 + 1.0 / uDotRadiusPX) * uViewportSize;
     fragDotRadiusPX = uDotRadiusPX + 1.0;
 }
-`,
-		fragment: `#version 300 es
+"""
+
+DOT_FRAGMENT = """\
 precision highp float;
 
-in vec2 fragUV;
 in float fragDotRadiusPX;
 out float outColor;
 
 void main() {
+    vec2 fragUV = gl_PointCoord * 2.0 - 1.0;
     float t = clamp((1.0 - length(fragUV)) * fragDotRadiusPX, 0.0, 1.0);
     outColor = t;
 }
-`
-	},
-	blur: {
-		vertex: `#version 300 es
+"""
 
+BLUR_VERTEX = """\
 uniform float uBlurRadius;
 uniform vec2 uBlurDirection;
 
@@ -188,8 +188,9 @@ void main() {
     fragUV = (inPosition + 1.0) / 2.0;
     fragBlurDirection = uBlurDirection;
 }
-`,
-		fragment: `#version 300 es
+"""
+
+BLUR_FRAGMENT = """\
 precision highp float;
 
 uniform sampler2D uInputTexture;
@@ -217,11 +218,9 @@ void main() {
         outColor += coefficientSum * (texture(uInputTexture, fragUV + offset).r + texture(uInputTexture, fragUV - offset).r);
     }
 }
-`
-	},
-	finalize: {
-		vertex: `#version 300 es
+"""
 
+FINALIZE_VERTEX = """\
 uniform vec3 uOutputColor;
 in vec2 inPosition;
 
@@ -233,8 +232,9 @@ void main() {
     fragUV = (inPosition + 1.0) / 2.0;
     fragOutputColor = uOutputColor;
 }
-`,
-		fragment: `#version 300 es
+"""
+
+FINALIZE_FRAGMENT = """\
 precision highp float;
 
 uniform sampler2D uBlurredTexture;
@@ -257,6 +257,4 @@ void main() {
     vec3 color = mix(fragOutputColor, uOutputColor2, smoothstep(0.1, 0.9, t));
     outColor = vec4(color * value, value);
 }
-`
-	},
-};
+"""

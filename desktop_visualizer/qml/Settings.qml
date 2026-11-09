@@ -496,6 +496,31 @@ ApplicationWindow {
                 }
             }
 
+            Section { text: "Performance" }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+
+                Label { text: "Frame rate" }
+                SettingCombo {
+                    key: "frame_rate"
+                    options: [["Match the display (" + backend.displayRate + " FPS, smoothest)", 0], ["144 FPS", 144],
+                              ["120 FPS", 120], ["60 FPS", 60], ["30 FPS (saves battery)", 30]]
+                }
+                Label { text: "Graphics card"; visible: backend.hasDedicatedGpu }
+                SettingCombo {
+                    visible: backend.hasDedicatedGpu
+                    key: "gpu"
+                    options: [["Automatic (dedicated when plugged in, integrated on battery)", "auto"],
+                              ["Dedicated (smoothest, uses more power)", "dedicated"],
+                              ["Integrated (saves battery)", "integrated"]]
+                }
+            }
+            Hint {
+                visible: backend.hasDedicatedGpu
+                text: "Changing the graphics card restarts the visualizer for a moment."
+            }
+
             Section { text: "When nothing is playing" }
             SettingSwitch { key: "fade_when_silent"; text: "Fade out when the music stops" }
             RowLayout {

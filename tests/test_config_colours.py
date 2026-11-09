@@ -60,6 +60,14 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             config.update({"layer": "sideways"}, self.path)
 
+    def test_performance_settings(self):
+        loaded = config.update({"gpu": "dedicated", "frame_rate": 144.0}, self.path)
+        self.assertEqual((loaded["gpu"], loaded["frame_rate"]), ("dedicated", 144))
+        self.assertEqual(config.load(self.path)["frame_rate"], 144)
+        self.assertEqual(config.update({"frame_rate": 9999}, self.path)["frame_rate"], 360)
+        with self.assertRaises(ValueError):
+            config.update({"gpu": "quantum"}, self.path)
+
     def test_reset(self):
         config.update({"colour_mode": "fixed", "x": 5}, self.path)
         loaded = config.reset(["colour_mode", "x"], self.path)

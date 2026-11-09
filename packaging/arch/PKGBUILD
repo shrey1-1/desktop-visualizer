@@ -1,12 +1,12 @@
 # Maintainer: shrey1-1 <https://github.com/shrey1-1>
 pkgname=desktop-visualizer
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="Spotify/system audio visualizer overlay for the Linux desktop (NCS visualizer), with OpenRGB sync"
 arch=('any')
 url="https://github.com/shrey1-1/desktop-visualizer"
 license=('MIT')
-depends=('python' 'pyside6' 'qt6-webengine' 'qt6-declarative' 'python-numpy' 'libpulse')
+depends=('python' 'pyside6' 'qt6-declarative' 'python-numpy' 'libpulse')
 optdepends=(
 	'layer-shell-qt: keep the overlay on top on KDE Plasma, Hyprland and Sway (Wayland)'
 	'playerctl: colours from the album cover'

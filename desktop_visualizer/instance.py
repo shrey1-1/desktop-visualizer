@@ -32,11 +32,17 @@ class InstanceServer(QObject):
         self.server = QLocalServer(self)
         self.server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
         name = server_name(kind)
-        if not self.server.listen(name):
-            # A crashed instance can leave a stale socket file behind.
-            QLocalServer.removeServer(name)
+        # Check first: with UserAccessOption Qt creates the socket elsewhere and moves it
+        # into place, so listen() would silently take over a running instance.
+        if not send(kind, "ping", timeout_ms=300):
+            QLocalServer.removeServer(name)  # a stale socket left by a crash, if any
             self.server.listen(name)
+        # Otherwise another instance is live; callers check `listening` and step aside.
         self.server.newConnection.connect(self._accept)
+
+    @property
+    def listening(self):
+        return self.server.isListening()
 
     def _accept(self):
         while self.server.hasPendingConnections():

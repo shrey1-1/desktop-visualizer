@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from desktop_visualizer import launcher
@@ -27,6 +28,67 @@ class BackendChoiceTest(unittest.TestCase):
     def test_override(self):
         env = {"XDG_SESSION_TYPE": "wayland", "DESKTOP_VISUALIZER_BACKEND": "x11"}
         self.assertEqual(launcher.choose_backend(env, has_layer_shell=True), "x11")
+
+
+class GpuTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.dir.name)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def make(self, *paths):
+        for rel in paths:
+            path = self.root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("")
+
+    def env(self):
+        return launcher.dedicated_gpu_env(proc=self.root / "proc", glvnd_dirs=[self.root / "glvnd"],
+                                          dri=self.root / "dri")
+
+    def test_nvidia_prime_offload(self):
+        self.make("proc/driver/nvidia/version", "glvnd/10_nvidia.json", "glvnd/50_mesa.json",
+                  "dri/renderD128", "dri/renderD129")
+        env = self.env()
+        self.assertEqual(env["__NV_PRIME_RENDER_OFFLOAD"], "1")
+        self.assertTrue(env["__EGL_VENDOR_LIBRARY_FILENAMES"].endswith("10_nvidia.json"))
+
+    def test_other_hybrid_uses_dri_prime(self):
+        self.make("dri/renderD128", "dri/renderD129")
+        self.assertEqual(self.env(), {"DRI_PRIME": "1"})
+
+    def test_single_gpu(self):
+        self.make("dri/renderD128")
+        self.assertIsNone(self.env())
+
+    def supply(self, name, kind, online=None):
+        d = self.root / "ps" / name
+        d.mkdir(parents=True)
+        (d / "type").write_text(kind + "\n")
+        if online is not None:
+            (d / "online").write_text(online + "\n")
+
+    def test_power(self):
+        self.supply("BAT0", "Battery")
+        self.supply("ADP0", "Mains", "0")
+        self.assertFalse(launcher.on_ac_power(self.root / "ps"))
+        (self.root / "ps" / "ADP0" / "online").write_text("1\n")
+        self.assertTrue(launcher.on_ac_power(self.root / "ps"))
+
+    def test_desktop_without_battery_counts_as_plugged_in(self):
+        self.root.joinpath("ps").mkdir()
+        self.assertTrue(launcher.on_ac_power(self.root / "ps"))
+        self.assertTrue(launcher.on_ac_power(self.root / "missing"))
+
+    def test_choose_gpu(self):
+        c = launcher.choose_gpu
+        self.assertEqual(c("auto", True, True), "dedicated")
+        self.assertEqual(c("auto", True, False), "integrated")
+        self.assertEqual(c("dedicated", True, False), "dedicated")
+        self.assertEqual(c("integrated", True, True), "integrated")
+        self.assertEqual(c("dedicated", False, True), "integrated")  # nothing to switch to
 
 
 class AutostartTest(unittest.TestCase):

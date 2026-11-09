@@ -41,11 +41,11 @@ distro_family() {
 
 install_hint() {
 	case "$(distro_family)" in
-	arch) echo "sudo pacman -S --needed pyside6 qt6-webengine python-numpy libpulse playerctl layer-shell-qt" ;;
-	fedora) echo "sudo dnf install python3-pyside6 qt6-qtwebengine python3-numpy pulseaudio-utils playerctl layer-shell-qt" ;;
-	debian) echo "sudo apt install python3-pyside6.qtwidgets python3-pyside6.qtquick python3-pyside6.qtquickcontrols2 python3-pyside6.qtwebenginequick python3-pyside6.qtnetwork qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts qml6-module-qtwebengine python3-numpy pulseaudio-utils playerctl layer-shell-qt" ;;
+	arch) echo "sudo pacman -S --needed pyside6 qt6-declarative python-numpy libpulse playerctl layer-shell-qt" ;;
+	fedora) echo "sudo dnf install python3-pyside6 python3-numpy pulseaudio-utils playerctl layer-shell-qt" ;;
+	debian) echo "sudo apt install python3-pyside6.qtwidgets python3-pyside6.qtquick python3-pyside6.qtquickcontrols2 python3-pyside6.qtopengl python3-pyside6.qtnetwork qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts python3-numpy pulseaudio-utils playerctl layer-shell-qt" ;;
 	suse) echo "sudo zypper install python3-pyside6 python3-numpy pulseaudio-utils playerctl layer-shell-qt6" ;;
-	*) echo "Install PySide6 (with Qt WebEngine and Qt Quick Controls), numpy, pactl/parec (PulseAudio utils), playerctl and layer-shell-qt using your package manager." ;;
+	*) echo "Install PySide6 6.4 or newer (with Qt Quick, Qt Quick Controls and Qt OpenGL), numpy, pactl/parec (PulseAudio utils), playerctl and layer-shell-qt using your package manager." ;;
 	esac
 }
 
@@ -55,7 +55,7 @@ find_python() {
 	local candidate
 	for candidate in /usr/bin/python3 python3; do
 		if command -v "$candidate" >/dev/null 2>&1 &&
-			"$candidate" -c 'import PySide6.QtWebEngineQuick, PySide6.QtQuickControls2, PySide6.QtWidgets, numpy' 2>/dev/null; then
+			"$candidate" -c 'import PySide6.QtOpenGL, PySide6.QtQuick, PySide6.QtQuickControls2, PySide6.QtWidgets, numpy' 2>/dev/null; then
 			command -v "$candidate"
 			return 0
 		fi
@@ -67,9 +67,9 @@ check_deps() {
 	local missing=0 python
 	bold "Checking dependencies"
 	if python="$(find_python)"; then
-		echo "  ok       Python with PySide6, Qt WebEngine and numpy ($python)"
+		echo "  ok       Python with PySide6 (Qt Quick, OpenGL) and numpy ($python)"
 	else
-		echo "  MISSING  Python 3 with PySide6 (Qt WebEngine, Qt Quick Controls) and numpy"
+		echo "  MISSING  Python 3 with PySide6 6.4+ (Qt Quick, Qt Quick Controls, Qt OpenGL) and numpy"
 		missing=1
 	fi
 	for cmd in pactl parec; do

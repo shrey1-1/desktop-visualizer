@@ -1,5 +1,5 @@
 import QtQuick
-import QtWebEngine
+import DesktopVisualizer
 
 // Transparent surface covering the screen. Normally it ignores all input; in edit mode only
 // the visualizer's box takes input (Python sets the input mask), so it can be moved and resized.
@@ -53,37 +53,35 @@ Window {
     onWidthChanged: place()
     onHeightChanged: place()
 
-    // ---- page communication ----
-
-    function js(code) {
-        if (view.loaded)
-            view.runJavaScript(code);
-    }
+    // ---- feeding the visualizer ----
 
     function sendAll() {
-        js("setTrack(" + app.seed + ")");
-        js("setColors(" + app.colours.join(",") + ")");
-        js("setFade(" + settings.fade_when_silent + "," + settings.fade_delay + ")");
-        js("setEditing(" + app.editing + ")");
+        view.setTrack(app.seed);
+        view.setColors(app.colours);
+        view.setFade(settings.fade_when_silent, settings.fade_delay);
+        view.setEditing(app.editing);
+        view.setFrameRate(app.frameRate);
     }
+
+    Component.onCompleted: sendAll()
 
     Connections {
         target: app
 
         function onLevel(value) {
-            root.js("pushLevel(" + value.toFixed(4) + ")");
+            view.pushLevel(value);
         }
 
         function onSeedChanged() {
-            root.js("setTrack(" + app.seed + ")");
+            view.setTrack(app.seed);
         }
 
         function onColoursChanged() {
-            root.js("setColors(" + app.colours.join(",") + ")");
+            view.setColors(app.colours);
         }
 
         function onSettingsChanged() {
-            root.js("setFade(" + root.settings.fade_when_silent + "," + root.settings.fade_delay + ")");
+            view.setFade(root.settings.fade_when_silent, root.settings.fade_delay);
             if (!app.editing && Math.round(root.boxSize) !== root.settings.size) {
                 // Size changed in the settings window: resize around the centre.
                 const old = root.boxSize;
@@ -96,13 +94,17 @@ Window {
         }
 
         function onEditingChanged() {
-            root.js("setEditing(" + app.editing + ")");
+            view.setEditing(app.editing);
             if (app.editing) {
                 root.updateInputArea();
                 keys.forceActiveFocus();
             } else {
                 root.save();
             }
+        }
+
+        function onFrameRateChanged() {
+            view.setFrameRate(app.frameRate);
         }
 
         function onResetRequested() {
@@ -127,24 +129,22 @@ Window {
         width: root.boxSize
         height: root.boxSize
 
-        WebEngineView {
+        Visualizer {
             id: view
 
-            property bool loaded: false
-
             anchors.fill: parent
-            opacity: root.settings.opacity
-            backgroundColor: "transparent"
-            url: app.pageUrl
-            settings.showScrollBars: false
+            // Fades out when the music stops (the item then stops drawing) and back in when it returns.
+            opacity: shown ? root.settings.opacity : 0
 
-            onLoadingChanged: request => {
-                if (request.status === WebEngineView.LoadSucceededStatus) {
-                    loaded = true;
-                    root.sendAll();
-                }
+            Behavior on opacity {
+                NumberAnimation { duration: 800; easing.type: Easing.InOutQuad }
             }
-            onJavaScriptConsoleMessage: (level, message, line, source) => console.log("[page]", message)
+
+            // Advances the animation once per displayed frame (e.g. 165 times a second).
+            FrameAnimation {
+                running: view.running
+                onTriggered: view.tick()
+            }
         }
 
         // Edit-mode frame and controls, drawn above the web view so it gets the mouse.

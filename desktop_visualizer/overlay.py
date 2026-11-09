@@ -1,15 +1,19 @@
 """The overlay process: transparent visualizer window, tray icon, audio, colours and RGB sync."""
 
+import math
+import os
 import signal
 import sys
 import time
 from pathlib import Path
 
+import shiboken6
+
 from PySide6.QtCore import (Property, QFileSystemWatcher, QObject, QRect, Qt, QTimer, QUrl, Signal,
                             Slot)
-from PySide6.QtGui import QAction, QGuiApplication, QIcon, QRegion
-from PySide6.QtQml import QQmlApplicationEngine
-from PySide6.QtWebEngineQuick import QtWebEngineQuick
+from PySide6.QtGui import QAction, QGuiApplication, QIcon, QOpenGLContext, QRegion, QSurfaceFormat
+from PySide6.QtQml import QQmlApplicationEngine, qmlRegisterType
+from PySide6.QtQuick import QQuickWindow, QSGRendererInterface
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from . import config, launcher
@@ -18,6 +22,7 @@ from .colours import ColourEngine, gradient_style_id
 from .instance import InstanceServer
 from .openrgb import RGBSync
 from .track import TrackWatcher
+from .visualizer_item import Visualizer, release_qt_objects
 
 PACKAGE = Path(__file__).resolve().parent
 COLOUR_TICK_MS = 33
@@ -33,10 +38,14 @@ class OverlayApp(QObject):
     coloursChanged = Signal()
     resetRequested = Signal()
     rgbStatus = Signal(str)
+    frameRateChanged = Signal()
+    restartRequested = Signal()
 
-    def __init__(self, layer_shell, parent=None):
+    def __init__(self, layer_shell, gpu, parent=None):
         super().__init__(parent)
         self.layer_shell = layer_shell
+        self.gpu = gpu  # "dedicated" or "integrated", fixed for the life of the process
+        self.has_dedicated = launcher.dedicated_gpu_env() is not None
         self._settings = config.load()
         self._editing = False
         self._seed = 0
@@ -55,6 +64,8 @@ class OverlayApp(QObject):
         self.rgbStatus.connect(lambda text: print(f"desktop-visualizer: {text}", file=sys.stderr))
 
         self.colour_timer = QTimer(self, interval=COLOUR_TICK_MS, timeout=self._tick_colours)
+        # In "auto" GPU mode, switch cards when the laptop is plugged in or unplugged.
+        self.power_timer = QTimer(self, interval=10000, timeout=self._check_gpu)
 
         # The settings window writes the config file; reload it whenever it changes.
         # Watch the folder too, because saving replaces the file.
@@ -70,9 +81,16 @@ class OverlayApp(QObject):
 
     def start(self):
         self.audio.start()
+        if os.environ.get("DESKTOP_VISUALIZER_DEMO") == "1":
+            # Troubleshooting/benchmark switch: animate with a fake beat instead of audio.
+            started = time.monotonic()
+            self.demo_timer = QTimer(self, interval=20, timeout=lambda: self.level.emit(
+                0.45 + 0.35 * abs(math.sin((time.monotonic() - started) * 3.1)) * abs(math.sin((time.monotonic() - started) * 0.7))))
+            self.demo_timer.start()
         self.rgb.start()
         self.tracks.start()
         self.colour_timer.start()
+        self.power_timer.start()
         self._tick_colours()
 
     def stop(self):
@@ -82,6 +100,8 @@ class OverlayApp(QObject):
     def attach(self, window):
         self.window = window
         self._apply_input()
+        window.screenChanged.connect(lambda *_: self.frameRateChanged.emit())
+        self.frameRateChanged.emit()
 
     # ---- properties for QML ----
 
@@ -105,10 +125,11 @@ class OverlayApp(QObject):
 
     colours = Property("QVariantList", _get_colours, notify=coloursChanged)
 
-    def _get_page_url(self):
-        return QUrl.fromLocalFile(str(PACKAGE / "web" / "index.html"))
+    def _get_frame_rate(self):
+        """Frame-rate limit for the renderer; 0 = draw on every display refresh."""
+        return self._settings["frame_rate"]
 
-    pageUrl = Property(QUrl, _get_page_url, constant=True)
+    frameRate = Property(int, _get_frame_rate, notify=frameRateChanged)
 
     # ---- settings ----
 
@@ -138,7 +159,15 @@ class OverlayApp(QObject):
         self.engine.apply_settings(new, now=self._now())
         self.rgb.configure(new)
         self.settingsChanged.emit()
+        self.frameRateChanged.emit()
         self._tick_colours()
+        self._check_gpu()
+
+    def _check_gpu(self):
+        wanted = launcher.choose_gpu(self._settings["gpu"], self.has_dedicated, launcher.on_ac_power())
+        if wanted != self.gpu:
+            # The graphics card can only be chosen when the process starts.
+            self.restartRequested.emit()
 
     # ---- colours ----
 
@@ -256,10 +285,26 @@ def apply_stacking(window, layer):
         window.show()
 
 
+def use_opengl():
+    """The visualizer draws with OpenGL, so Qt Quick must use it too (not Vulkan)."""
+    QQuickWindow.setGraphicsApi(QSGRendererInterface.GraphicsApi.OpenGL)
+    fmt = QSurfaceFormat()
+    # Ask for no particular version: EGL on Wayland can refuse an explicit core-profile
+    # request, while the default context is the newest compatibility one (4.x on current
+    # drivers), which runs the "#version 330 core" shaders. gl_pipeline checks the version.
+    if QOpenGLContext.openGLModuleType() != QOpenGLContext.OpenGLModuleType.LibGL:
+        fmt.setRenderableType(QSurfaceFormat.RenderableType.OpenGLES)
+        fmt.setVersion(3, 0)
+    fmt.setAlphaBufferSize(8)  # transparent window
+    QSurfaceFormat.setDefaultFormat(fmt)
+
+
 def run(edit=False):
     layer_shell = launcher.configure_platform()
+    gpu = launcher.configure_gpu(config.load())
 
-    QtWebEngineQuick.initialize()
+    use_opengl()
+    qmlRegisterType(Visualizer, "DesktopVisualizer", 1, 0, "Visualizer")
     app = QApplication(sys.argv[:1])
     app.setApplicationName("desktop-visualizer")
     app.setApplicationDisplayName("Desktop Visualizer")
@@ -267,7 +312,22 @@ def run(edit=False):
     app.setQuitOnLastWindowClosed(False)
 
     server = InstanceServer("overlay")
-    overlay = OverlayApp(layer_shell)
+    if not server.listening:
+        print("desktop-visualizer: already running", file=sys.stderr)
+        return 0
+    overlay = OverlayApp(layer_shell, gpu)
+
+    restarting = []
+
+    def restart():
+        if restarting:
+            return
+        restarting.append(True)
+        server.server.close()  # free the single-instance name for the new process
+        launcher.spawn(["--foreground"])
+        app.quit()
+
+    overlay.restartRequested.connect(restart)
     server.command.connect(overlay.handle_command)
 
     engine = QQmlApplicationEngine()
@@ -303,7 +363,12 @@ def run(edit=False):
     tick = QTimer(interval=250, timeout=lambda: None)
     tick.start()
 
-    return app.exec()
+    code = app.exec()
+    # Destroy the window (and with it Qt's renderer objects) before Python cleans up.
+    del window
+    shiboken6.delete(engine)
+    release_qt_objects()
+    return code
 
 
 if __name__ == "__main__":

@@ -53,6 +53,66 @@ def configure_platform():
     return False
 
 
+# ---- graphics card and frame rate ----
+
+def dedicated_gpu_env(proc=Path("/proc"), glvnd_dirs=None, dri=Path("/dev/dri")):
+    """Environment variables that make this process render on the dedicated GPU, or None.
+
+    NVIDIA (proprietary driver) uses PRIME render offload; other hybrid laptops (AMD, or
+    Intel + AMD with Mesa) use DRI_PRIME. Must be applied before Qt loads any GL library.
+    """
+    if (proc / "driver" / "nvidia").exists():
+        dirs = glvnd_dirs or [Path("/usr/share/glvnd/egl_vendor.d"), Path("/etc/glvnd/egl_vendor.d")]
+        vendor = next((f for d in dirs if d.is_dir() for f in sorted(d.glob("*nvidia*.json"))), None)
+        if vendor is not None:
+            return {
+                "__NV_PRIME_RENDER_OFFLOAD": "1",
+                "__GLX_VENDOR_LIBRARY_NAME": "nvidia",
+                "__EGL_VENDOR_LIBRARY_FILENAMES": str(vendor),
+                "__VK_LAYER_NV_optimus": "NVIDIA_only",
+            }
+    if dri.is_dir() and len(list(dri.glob("renderD*"))) >= 2:
+        return {"DRI_PRIME": "1"}
+    return None
+
+
+def on_ac_power(root=Path("/sys/class/power_supply")):
+    """True when plugged in, or when there's no battery at all (desktop PCs)."""
+    has_battery = False
+    try:
+        supplies = list(root.iterdir())
+    except OSError:
+        return True
+    for supply in supplies:
+        try:
+            kind = (supply / "type").read_text().strip()
+            if kind == "Mains" and (supply / "online").read_text().strip() == "1":
+                return True
+            if kind == "Battery":
+                has_battery = True
+        except OSError:
+            continue
+    return not has_battery
+
+
+def choose_gpu(setting, has_dedicated, plugged_in):
+    """"dedicated" or "integrated" for the given setting ("auto", "dedicated", "integrated")."""
+    if not has_dedicated or setting == "integrated":
+        return "integrated"
+    if setting == "dedicated" or plugged_in:
+        return "dedicated"
+    return "integrated"
+
+
+def configure_gpu(settings):
+    """Pick the graphics card. Call before QApplication exists. Returns "dedicated" or "integrated"."""
+    env = dedicated_gpu_env()
+    choice = choose_gpu(settings["gpu"], env is not None, on_ac_power())
+    if choice == "dedicated":
+        os.environ.update(env)
+    return choice
+
+
 def boot_code(app_dir):
     """Python code that runs the app from `app_dir`.
 

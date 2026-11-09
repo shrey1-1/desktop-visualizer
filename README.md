@@ -24,20 +24,20 @@ Run the command for your Linux distribution. It asks for your password.
 
 **Arch, CachyOS, Manjaro, EndeavourOS**
 ```sh
-sudo pacman -S --needed git pyside6 qt6-webengine python-numpy libpulse playerctl layer-shell-qt
+sudo pacman -S --needed git pyside6 qt6-declarative python-numpy libpulse playerctl layer-shell-qt
 ```
 
 **Fedora**
 ```sh
-sudo dnf install git python3-pyside6 qt6-qtwebengine python3-numpy pulseaudio-utils playerctl layer-shell-qt
+sudo dnf install git python3-pyside6 python3-numpy pulseaudio-utils playerctl layer-shell-qt
 ```
 
 **Debian, Ubuntu, Linux Mint, Pop!_OS**
 ```sh
 sudo apt install git python3-numpy pulseaudio-utils playerctl layer-shell-qt \
   python3-pyside6.qtwidgets python3-pyside6.qtquick python3-pyside6.qtquickcontrols2 \
-  python3-pyside6.qtwebenginequick python3-pyside6.qtnetwork \
-  qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts qml6-module-qtwebengine
+  python3-pyside6.qtopengl python3-pyside6.qtnetwork qml6-module-qtquick \
+  qml6-module-qtquick-controls qml6-module-qtquick-dialogs qml6-module-qtquick-layouts
 ```
 
 **openSUSE**
@@ -150,7 +150,7 @@ Changes apply instantly. You don't need to restart anything.
 | --- | --- |
 | **Colours** | Where the colour comes from: the **album cover** (default), **one fixed colour**, **random** (every song or every few seconds), a **rainbow** cycle, or a **palette** cycle (Neon, Synthwave, Sunset, Ocean, Forest, Fire, Ice, Candy). Add a **second colour** for a gradient. Adjust brightness, saturation and fade speed. |
 | **Keyboard RGB** | Make your keyboard and other RGB devices match the visualizer ([setup below](#keyboard-and-rgb-lighting)). |
-| **Display** | Size, see-through amount, and **where it shows**: on top of windows, on top of everything (even fullscreen games and videos), or **desktop only** (behind all windows, like a live wallpaper). Choose whether it fades out when the music stops. |
+| **Display** | Size, see-through amount, and **where it shows**: on top of windows, on top of everything (even fullscreen games and videos), or **desktop only** (behind all windows, like a live wallpaper). **Frame rate** (match your display, or limit it to save battery) and, on laptops with two GPUs, which **graphics card** to use. Choose whether it fades out when the music stops. |
 | **Audio** | **Spotify only** or **all system audio**. Sensitivity is automatic, or you can set it yourself. |
 | **General** | Start at login. Reset everything. |
 
@@ -209,6 +209,14 @@ Settings → Display → *Show it* → **On top of everything**. On KDE, Hyprlan
 Check that OpenRGB is running with its SDK server started (see step 3 above), then click **Find
 devices** in Settings → Keyboard RGB. Messages are in `~/.cache/desktop-visualizer/log.txt`.
 
+**It isn't smooth / the frame rate is low.**
+The sphere is drawn from about 100,000 dots, which is heavy work for integrated graphics. On
+laptops with a dedicated GPU, Settings → Display → *Graphics card* → **Dedicated** is the fastest
+option (*Automatic* already uses it while plugged in). On integrated graphics alone, expect
+roughly 25–40 FPS. To see the actual frame rate, run:
+`DESKTOP_VISUALIZER_FPS=1 desktop-visualizer --foreground`. Add `DESKTOP_VISUALIZER_DEMO=1` to
+animate it with a fake beat, without music.
+
 **Something else.** [Open an issue](https://github.com/shrey1-1/desktop-visualizer/issues) and include the output of
 `desktop-visualizer --foreground`.
 
@@ -233,9 +241,12 @@ set `DESKTOP_VISUALIZER_BACKEND=layer-shell` or `x11`.
   album cover provides the colour.
 - `colours.py` decides the colours from your settings. `openrgb.py` is a small OpenRGB client
   that needs no extra packages.
-- `web/` draws the visualizer. The drawing code comes from the original Spicetify project, with an
-  added gradient option. The input is live audio instead of Spotify's pre-analysed song data, so the
-  motion trails the music by about 50–100 ms.
+- `shaders.py`, `gl_pipeline.py` and `visualizer_item.py` draw the visualizer with OpenGL inside a
+  Qt Quick item. It redraws once per screen refresh (for example 165 times a second), and stops
+  drawing when it fades out. The shaders and the four drawing passes come from the original
+  Spicetify project. Dots are drawn as points and the glow is blurred at half resolution, which
+  is faster with the same result, and there's an added gradient option. The input is live audio
+  instead of Spotify's pre-analysed song data, so the motion trails the music by about 50–100 ms.
 - `qml/` contains the overlay window and the settings window. Settings are stored in
   `~/.config/desktop-visualizer/config.json`.
 

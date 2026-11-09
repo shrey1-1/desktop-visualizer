@@ -72,6 +72,18 @@ class SettingsBackend(QObject):
 
     palettes = Property("QVariantList", _get_palettes, constant=True)
 
+    def _get_has_dedicated_gpu(self):
+        return launcher.dedicated_gpu_env() is not None
+
+    hasDedicatedGpu = Property(bool, _get_has_dedicated_gpu, constant=True)
+
+    def _get_display_rate(self):
+        screen = QGuiApplication.primaryScreen()
+        rate = screen.refreshRate() if screen is not None else 60.0
+        return int(round(rate)) if rate >= 24 else 60
+
+    displayRate = Property(int, _get_display_rate, constant=True)
+
     def _get_autostart(self):
         return self._autostart
 
@@ -169,6 +181,8 @@ def run():
     if instance.send("settings", "raise"):
         return 0
     server = instance.InstanceServer("settings")
+    if not server.listening:
+        return 0
 
     if not os.environ.get("QT_QUICK_CONTROLS_STYLE"):
         # KDE's style blends in on Plasma; Fusion works everywhere else.

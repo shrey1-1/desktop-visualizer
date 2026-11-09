@@ -1,3 +1,3 @@
 """Desktop Visualizer: the Spicetify NCS visualizer as a desktop overlay driven by live audio."""
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
