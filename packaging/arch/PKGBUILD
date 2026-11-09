@@ -12,31 +12,16 @@ optdepends=(
 	'playerctl: colours from the album cover'
 	'openrgb: sync keyboard and other RGB devices'
 )
-# For a local build from a checkout, run `makepkg` with LOCAL_SRC=/path/to/checkout.
-if [[ -n "${LOCAL_SRC:-}" ]]; then
-	source=()
-	sha256sums=()
-else
-	source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-	sha256sums=('SKIP')
-fi
-
-_srcdir() {
-	if [[ -n "${LOCAL_SRC:-}" ]]; then
-		echo "$LOCAL_SRC"
-	else
-		echo "$srcdir/$pkgname-$pkgver"
-	fi
-}
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('2f45f79fde777fd879e2ea02d3288a91580a50409f93dfb7a43f4a956455e776')
 
 check() {
-	cd "$(_srcdir)"
+	cd "$pkgname-$pkgver"
 	python -m unittest discover -s tests
 }
 
 package() {
-	local src
-	src="$(_srcdir)"
+	local src="$srcdir/$pkgname-$pkgver"
 	install -d "$pkgdir/usr/lib/$pkgname"
 	cp -r "$src/desktop_visualizer" "$pkgdir/usr/lib/$pkgname/"
 	find "$pkgdir/usr/lib/$pkgname" -name __pycache__ -type d -prune -exec rm -rf {} +

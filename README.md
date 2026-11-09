@@ -29,8 +29,7 @@ if it was running. Run it again to update.
 
 ```sh
 cd packaging/arch
-makepkg -si                                     # from the published release
-LOCAL_SRC="$PWD/../.." makepkg -si              # or from this checkout
+makepkg -si      # builds the tagged release from GitHub and installs it
 ```
 
 ### Requirements
