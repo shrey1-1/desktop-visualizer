@@ -65,7 +65,14 @@ class LevelMeterTest(unittest.TestCase):
         self.assertLess(soft, loud * 0.5)
 
     def test_very_quiet_audio_is_not_blown_up(self):
-        self.assertLess(feed_hops(LevelMeter(), sine(0.01, 1.0)), 0.2)
+        level = feed_hops(LevelMeter(), sine(0.01, 1.0))
+        self.assertLess(level, 0.2)
+        self.assertGreater(level, 0.0)
+
+    def test_auto_gain_recovers_after_a_volume_drop(self):
+        meter = LevelMeter()
+        feed_hops(meter, sine(0.6, 2.0))
+        self.assertGreater(feed_hops(meter, sine(0.15, 4.0)), 0.6)
 
     def test_fixed_gain_and_clamp(self):
         rms = 0.4 / np.sqrt(2)

@@ -48,13 +48,14 @@ def list_sink_inputs():
 class LevelMeter:
     """Turns raw samples into a 0..1 level comparable to the original's loudness amplitude.
 
-    With gain=None the level is normalised against a slowly decaying peak, so the
-    visual looks the same whatever Spotify's volume slider is set to.
+    With gain=None the level is normalised against a short, decaying peak, so the
+    visual looks the same whatever Spotify's volume slider is set to, and recovers
+    within a second or two when the volume changes.
     """
 
-    PEAK_HALF_LIFE = 30.0  # seconds
+    PEAK_HALF_LIFE = 2.0  # seconds
     TARGET_PEAK = 0.75  # level the recent loudest part maps to
-    NOISE_FLOOR = 0.003  # RMS below this is treated as silence
+    NOISE_FLOOR = 1e-4  # RMS below this is treated as silence
 
     def __init__(self, gain=None, hop_seconds=HOP_SECONDS, window_seconds=WINDOW_SECONDS):
         self.gain = gain
@@ -89,7 +90,7 @@ class LevelMeter:
         if self.peak <= 0.0:
             return 0.0
         # Keep a minimum reference so very quiet tracks aren't blown up to full size.
-        reference = max(self.peak, 0.05)
+        reference = max(self.peak, 0.03)
         return min(self.TARGET_PEAK * rms / reference, 1.0)
 
 
