@@ -108,7 +108,11 @@ stop_running() {
 do_uninstall() {
 	stop_running
 	rm -rf "$APPDIR"
-	rm -f "$LAUNCHER" "$DESKTOP_FILE" "$ICON_FILE" "$AUTOSTART_FILE"
+	rm -f "$LAUNCHER" "$DESKTOP_FILE" "$ICON_FILE"
+	# Only remove the login entry if it starts this copy (not one installed elsewhere).
+	if [[ -f "$AUTOSTART_FILE" ]] && grep -qF "Exec=$LAUNCHER " "$AUTOSTART_FILE"; then
+		rm -f "$AUTOSTART_FILE"
+	fi
 	if [[ "${1:-}" == purge ]]; then
 		rm -rf "$CONFIG_DIR"
 		echo "Removed Desktop Visualizer and its settings."
@@ -154,9 +158,14 @@ EOF
 	command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q "$PREFIX/share/applications" || true
 	command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
 
-	# Keep a start-at-login entry pointing at the new launcher.
+	# Keep a start-at-login entry working: re-point it here only if it already starts this
+	# copy or the program it starts is gone (never take over another installed copy's entry).
 	if [[ -f "$AUTOSTART_FILE" ]]; then
-		sed -i "s|^Exec=.*|Exec=$LAUNCHER --start|" "$AUTOSTART_FILE"
+		local current
+		current="$(sed -n 's/^Exec=\([^ ]*\).*/\1/p' "$AUTOSTART_FILE" | head -n 1)"
+		if [[ "$current" == "$LAUNCHER" || ! -x "$current" ]]; then
+			sed -i "s|^Exec=.*|Exec=$LAUNCHER --start|" "$AUTOSTART_FILE"
+		fi
 	fi
 
 	echo
