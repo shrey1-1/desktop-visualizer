@@ -1,19 +1,42 @@
 """One running copy per user: later launches pass their command to it over a local socket."""
 
 import os
+import stat
+import tempfile
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 
 def server_name(kind):
-    return f"desktop-visualizer-{kind}-{os.getuid()}"
+    """Full path of the control socket.
+
+    It lives in $XDG_RUNTIME_DIR, which only this user can access, so another account
+    can't create the socket first (a plain name would put it in the shared /tmp).
+    """
+    name = f"desktop-visualizer-{kind}-{os.getuid()}"
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime and os.path.isdir(runtime):
+        return os.path.join(runtime, name)
+    return os.path.join(tempfile.gettempdir(), name)
+
+
+def _trusted(path):
+    """Only talk to a socket file owned by this user (matters for the /tmp fallback)."""
+    try:
+        info = os.lstat(path)
+    except OSError:
+        return False
+    return stat.S_ISSOCK(info.st_mode) and info.st_uid == os.getuid()
 
 
 def send(kind, command, timeout_ms=1000):
     """Deliver `command` to the running instance. Returns False if none is running."""
+    path = server_name(kind)
+    if not _trusted(path):
+        return False
     sock = QLocalSocket()
-    sock.connectToServer(server_name(kind))
+    sock.connectToServer(path)
     if not sock.waitForConnected(timeout_ms):
         return False
     sock.write(command.encode() + b"\n")
@@ -35,8 +58,9 @@ class InstanceServer(QObject):
         # Check first: with UserAccessOption Qt creates the socket elsewhere and moves it
         # into place, so listen() would silently take over a running instance.
         if not send(kind, "ping", timeout_ms=300):
-            QLocalServer.removeServer(name)  # a stale socket left by a crash, if any
-            self.server.listen(name)
+            if not os.path.exists(name) or _trusted(name):
+                QLocalServer.removeServer(name)  # a stale socket left by a crash, if any
+            self.server.listen(name)  # fails (and we step aside) if someone else owns the path
         # Otherwise another instance is live; callers check `listening` and step aside.
         self.server.newConnection.connect(self._accept)
 
