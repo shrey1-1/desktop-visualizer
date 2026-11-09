@@ -487,10 +487,12 @@ ApplicationWindow {
                 SettingSlider { key: "size"; from: 120; to: 1600; stepSize: 10; decimals: 0; suffix: " px" }
                 Label { text: "Opacity" }
                 SettingSlider { key: "opacity"; from: 0.1; to: 1; scale: 100; decimals: 0; suffix: " %" }
-                Label { text: "Stay on top of" }
+                Label { text: "Show it" }
                 SettingCombo {
                     key: "layer"
-                    options: [["Normal windows (below fullscreen games/videos)", "top"], ["Everything, even fullscreen", "overlay"]]
+                    options: [["On top of windows (below fullscreen games/videos)", "top"],
+                              ["On top of everything, even fullscreen", "overlay"],
+                              ["Desktop only (behind all windows, like a wallpaper)", "bottom"]]
                 }
             }
 

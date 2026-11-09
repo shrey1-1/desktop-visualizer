@@ -54,6 +54,12 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(loaded["fixed_colour"], "#aabbcc")
         self.assertIsInstance(loaded["openrgb_port"], int)
 
+    def test_layer_options(self):
+        for layer in ("top", "overlay", "bottom"):
+            self.assertEqual(config.update({"layer": layer}, self.path)["layer"], layer)
+        with self.assertRaises(ValueError):
+            config.update({"layer": "sideways"}, self.path)
+
     def test_reset(self):
         config.update({"colour_mode": "fixed", "x": 5}, self.path)
         loaded = config.reset(["colour_mode", "x"], self.path)

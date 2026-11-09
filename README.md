@@ -89,7 +89,9 @@ Changes apply straight away. They're stored in `~/.config/desktop-visualizer/con
   - Brightness, saturation, and how long colours take to fade into each other.
 - **Keyboard RGB:** sync to OpenRGB devices (all or selected), RGB brightness, and an OpenRGB
   profile to load when the visualizer closes.
-- **Display:** size, opacity, whether it covers fullscreen apps, and fade-out when silent (with a delay).
+- **Display:** size, opacity, where it shows (on top of windows, on top of everything including
+  fullscreen apps, or **desktop only**: behind all windows like a live wallpaper), and fade-out
+  when silent (with a delay).
 - **Audio:** Spotify only or all system audio, and automatic or manual sensitivity.
 - **General:** start at login, and reset all settings.
 

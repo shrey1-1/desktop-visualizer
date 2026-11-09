@@ -73,7 +73,7 @@ SCHEMA = {
     "size": (520, _number(120, 4000, integer=True)),
     # Display
     "opacity": (0.9, _number(0.1, 1.0)),
-    "layer": ("top", _choice("top", "overlay")),
+    "layer": ("top", _choice("top", "overlay", "bottom")),  # bottom = desktop only, behind windows
     "fade_when_silent": (True, _boolean),
     "fade_delay": (2.0, _number(0.5, 30.0)),
     # Audio

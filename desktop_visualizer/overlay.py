@@ -241,6 +241,21 @@ def make_tray(app, overlay):
     return tray
 
 
+def apply_stacking(window, layer):
+    """Without layer-shell: always-on-top, or always-below for "Desktop only"."""
+    below = layer == "bottom"
+    if window.flags() & Qt.WindowType.WindowStaysOnBottomHint and below:
+        return
+    if window.flags() & Qt.WindowType.WindowStaysOnTopHint and not below:
+        return
+    visible = window.isVisible()
+    window.setFlag(Qt.WindowType.WindowStaysOnTopHint, not below)
+    window.setFlag(Qt.WindowType.WindowStaysOnBottomHint, below)
+    if visible:  # X11 window managers only read these hints when the window is mapped
+        window.hide()
+        window.show()
+
+
 def run(edit=False):
     layer_shell = launcher.configure_platform()
 
@@ -265,11 +280,13 @@ def run(edit=False):
     window = engine.rootObjects()[0]
 
     if not layer_shell:
-        # No layer-shell (GNOME, X11): an always-on-top, taskbar-less window over the screen.
-        window.setFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+        # No layer-shell (GNOME, X11): a taskbar-less window over the screen, kept above
+        # or below other windows by the window manager.
         window.setFlag(Qt.WindowType.Tool, True)
+        apply_stacking(window, overlay.settings["layer"])
         screen = QGuiApplication.primaryScreen()
         window.setGeometry(screen.availableGeometry())
+        overlay.settingsChanged.connect(lambda: apply_stacking(window, overlay.settings["layer"]))
 
     window.show()
     overlay.attach(window)
