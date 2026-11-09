@@ -108,7 +108,7 @@ float fractalNoise(vec3 coord) {
 
 void main() {
     float noise = fractalNoise(vec3(fragUV * uNoiseFrequency, uNoiseOffset)) * uNoiseAmplitude;
-    vec3 dotCenter = vec3(fragUV * uDotSpacing + uDotOffset + noise, (noise + 0.5 * uNoiseAmplitude) * uAmplitude * 0.4);
+    vec3 dotCenter = vec3(fragUV * uDotSpacing + uDotOffset + noise, (noise + 0.5 * uNoiseAmplitude) * (0.4 + 0.6 * uAmplitude) * 0.4);
     
     float distanceFromCenter = length(dotCenter);
     dotCenter /= distanceFromCenter;
