@@ -107,7 +107,7 @@ class AutostartTest(unittest.TestCase):
     def test_command_without_installed_launcher(self):
         with mock.patch.dict(os.environ, {"DESKTOP_VISUALIZER_LAUNCHER": ""}):
             command = launcher.launcher_command()
-        self.assertIn(" -I -c ", command)
+        self.assertIn(" -E -c ", command)
         self.assertIn(str(launcher.PACKAGE.parent), command)
 
     def test_current_folder_cannot_shadow_the_app(self):
@@ -123,7 +123,7 @@ class AutostartTest(unittest.TestCase):
             with open(os.path.join(fake, "__main__.py"), "w") as f:
                 f.write("raise SystemExit('shadowed')\n")
             result = subprocess.run(
-                [sys.executable, "-I", "-c", launcher.boot_code(launcher.PACKAGE.parent), "--version"],
+                [sys.executable, "-E", "-c", launcher.boot_code(launcher.PACKAGE.parent), "--version"],
                 cwd=tmp, capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("desktop-visualizer", result.stdout)

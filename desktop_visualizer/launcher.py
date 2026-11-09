@@ -116,16 +116,19 @@ def configure_gpu(settings):
 def boot_code(app_dir):
     """Python code that runs the app from `app_dir`.
 
-    Used with `python -I -c`: isolated mode keeps the current folder (and PYTHONPATH)
-    off the import path, so a stray desktop_visualizer/ wherever you happen to run
-    the command can't shadow the installed one.
+    The command uses `python -E -c` (ignore PYTHONPATH and other PYTHON* variables) and
+    this code drops the current folder from the import path. That keeps a stray
+    desktop_visualizer/ wherever the command is run from out of the way, while still
+    allowing packages installed with `pip install --user` (unlike isolated mode).
     """
-    return (f"import sys; sys.path.insert(0, {str(app_dir)!r}); "
+    return ("import os, sys; "
+            "sys.path[:] = [p for p in sys.path if p and os.path.abspath(p) != os.getcwd()]; "
+            f"sys.path.insert(0, {str(app_dir)!r}); "
             "from desktop_visualizer.__main__ import main; sys.exit(main())")
 
 
 def module_command(args):
-    return [sys.executable, "-I", "-c", boot_code(PACKAGE.parent), *args]
+    return [sys.executable, "-E", "-c", boot_code(PACKAGE.parent), *args]
 
 
 def spawn(args):
