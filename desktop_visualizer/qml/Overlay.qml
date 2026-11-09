@@ -24,12 +24,17 @@ Window {
     // compositor doesn't blend a full-screen transparent surface every frame.
     property bool shrinkable: false
     readonly property bool boxSurface: shrinkable && !app.editing
+    // Room the box may use. With a shrinkable surface this is always the screen: the window
+    // briefly has the box's size while switching to edit mode, and clamping against that
+    // would push the box to the top-left corner.
+    readonly property real roomWidth: shrinkable ? screen.width : width
+    readonly property real roomHeight: shrinkable ? screen.height : height
 
     // ---- placement ----
 
     function clamp() {
-        const sw = boxSurface ? screen.width : width;
-        const sh = boxSurface ? screen.height : height;
+        const sw = roomWidth;
+        const sh = roomHeight;
         boxSize = Math.max(minSize, Math.min(boxSize, sw, sh));
         boxX = Math.max(0, Math.min(boxX, sw - boxSize));
         boxY = Math.max(0, Math.min(boxY, sh - boxSize));
@@ -131,8 +136,8 @@ Window {
         }
 
         function onResetRequested() {
-            const sw = root.boxSurface ? root.screen.width : root.width;
-            const sh = root.boxSurface ? root.screen.height : root.height;
+            const sw = root.roomWidth;
+            const sh = root.roomHeight;
             root.custom = false;
             root.boxSize = root.settings.size;
             root.boxX = (sw - root.boxSize) / 2;
@@ -264,7 +269,7 @@ Window {
                         const p = mapToItem(null, mouse.x, mouse.y);
                         const delta = Math.max(p.x - start.x, p.y - start.y);
                         root.custom = true;
-                        root.boxSize = Math.min(startSize + delta, root.width - root.boxX, root.height - root.boxY);
+                        root.boxSize = Math.min(startSize + delta, root.roomWidth - root.boxX, root.roomHeight - root.boxY);
                         root.clamp();
                         root.updateInputArea();
                     }

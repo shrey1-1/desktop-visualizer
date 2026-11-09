@@ -128,6 +128,19 @@ class AutostartTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("desktop-visualizer", result.stdout)
 
+    def test_running_from_a_package_folder_keeps_it_importable(self):
+        # Only the implicit current-folder entry is dropped, not real import paths.
+        import subprocess
+        import sys
+
+        import PySide6
+        site = os.path.dirname(os.path.dirname(PySide6.__file__))
+        code = launcher.boot_code(launcher.PACKAGE.parent).replace(
+            "from desktop_visualizer.__main__ import main; sys.exit(main())", "import PySide6.QtCore")
+        result = subprocess.run([sys.executable, "-E", "-c", code], cwd=site,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 class CliTest(unittest.TestCase):
     def test_actions(self):

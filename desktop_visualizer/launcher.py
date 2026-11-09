@@ -117,12 +117,13 @@ def boot_code(app_dir):
     """Python code that runs the app from `app_dir`.
 
     The command uses `python -E -c` (ignore PYTHONPATH and other PYTHON* variables) and
-    this code drops the current folder from the import path. That keeps a stray
+    this code drops the current folder from the import path: `-c` adds it as the empty
+    entry '' (other entries are left alone, even if one equals the current folder). That keeps a stray
     desktop_visualizer/ wherever the command is run from out of the way, while still
     allowing packages installed with `pip install --user` (unlike isolated mode).
     """
-    return ("import os, sys; "
-            "sys.path[:] = [p for p in sys.path if p and os.path.abspath(p) != os.getcwd()]; "
+    return ("import sys; "
+            "sys.path[:] = [p for p in sys.path if p]; "
             f"sys.path.insert(0, {str(app_dir)!r}); "
             "from desktop_visualizer.__main__ import main; sys.exit(main())")
 
