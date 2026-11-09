@@ -13,7 +13,7 @@ optdepends=(
 	'openrgb: sync keyboard and other RGB devices'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('f1ff92dddf0f7af10e9b17115f417ef1a31b5b8c98d5d32c54e26092dc2963f5')
+sha256sums=('5d7d7a7ba686ba6fe00be6e928f5f73be16e0107480f71bbf7b8ba5053c59daf')
 
 check() {
 	cd "$pkgname-$pkgver"
