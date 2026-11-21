@@ -8,8 +8,9 @@ from pathlib import Path
 
 import shiboken6
 
-from PySide6.QtCore import (Property, QFileSystemWatcher, QObject, QRect, Qt, QTimer, QUrl, Signal,
+from PySide6.QtCore import (SLOT, Property, QFileSystemWatcher, QObject, QRect, Qt, QTimer, QUrl, Signal,
                             Slot)
+from PySide6.QtDBus import QDBusConnection
 from PySide6.QtGui import QAction, QGuiApplication, QIcon, QOpenGLContext, QRegion, QSurfaceFormat
 from PySide6.QtQml import QQmlApplicationEngine, qmlRegisterType
 from PySide6.QtQuick import QQuickWindow, QSGRendererInterface
@@ -58,6 +59,11 @@ class OverlayApp(QObject):
         self.audio = AudioCapture(self.level.emit, on_analysis=self.analysis.emit, **self._audio_options())
         self.audio.analysis_enabled = self._settings["style"] != "sphere"
         self.rgb = RGBSync(on_status=self.rgbStatus.emit)
+        # The GPU can lose the window's GL memory over suspend (NVIDIA most of all), leaving
+        # the overlay blank or frozen, so start a fresh process after every resume.
+        QDBusConnection.systemBus().connect(
+            "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager",
+            "PrepareForSleep", self, SLOT("_on_prepare_for_sleep(bool)"))
         self.rgb.configure(self._settings)
         self.tracks = TrackWatcher(player=self._player())
         self.tracks.trackChanged.connect(self._on_track)
@@ -171,6 +177,11 @@ class OverlayApp(QObject):
         self.frameRateChanged.emit()
         self._tick_colours()
         self._check_gpu()
+
+    @Slot(bool)
+    def _on_prepare_for_sleep(self, sleeping):
+        if not sleeping:
+            QTimer.singleShot(2000, self.restartRequested.emit)  # give the driver a moment to wake
 
     def _check_gpu(self):
         wanted = launcher.choose_gpu(self._settings["gpu"], self.has_dedicated, launcher.on_ac_power())
